@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Gmail Sync MVP",
+  "version": "0.1.0",
+  "description": "Reads labeled emails, extracts expenses with AI, writes to Google Sheets.",
+  "action": { "default_popup": "popup.html" },
+  "options_page": "options.html",
+  "permissions": ["storage", "identity", "tabs"]
+}
