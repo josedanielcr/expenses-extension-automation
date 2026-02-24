@@ -14,7 +14,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string JsonObjectType = "json_object";
     private const string OpenAiSecretName = "openai-api-key";
     private const string DefaultModel = "gpt-4o-mini";
-    private const double DefaultTemperature = 0;
+    private const double DefaultTemperature = 1;
     private const string ConfigOpenAiApiKey = "OPENAI_API_KEY";
     private const string ConfigOpenAiApiKeyFromVault = "openai-api-key";
     private const string ConfigKeyVaultUri = "KEY_VAULT_URI";

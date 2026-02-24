@@ -34,7 +34,7 @@ public class OnEmailPush
 
     [Function(FunctionName)]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Function, HttpMethodPost)] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, HttpMethodPost)] HttpRequest req,
         CancellationToken ct)
     {
         var readResult = await TryReadRequestAsync(req, ct);
