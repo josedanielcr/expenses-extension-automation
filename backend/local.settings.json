@@ -8,7 +8,7 @@
         "KEY_VAULT_LOAD_ON_STARTUP": "false",
         "KEY_VAULT_URI": "https://ai-gastos-vault.vault.azure.net/",
         "OPENAI_MODEL": "gpt-5-nano",
-        "OPENAI_SYSTEM_PROMPT": "You extract expense data from emails. Be creative and infer intent from the full email description to assign the most appropriate category from the provided list. Return valid JSON only with keys: date, amount, category, description.",
-        "OPENAI_USER_PROMPT_TEMPLATE": "Categories: {{categories}}\\nSender: {{sender}}\\nDate: {{date}}\\nMessage:\\n{{message}}\\n\\nRules:\\n- Use provided date when possible.\\n- amount should include currency symbol if present.\\n- category should be one of the provided categories when possible.\\n- description should be short and concrete."
+        "OPENAI_SYSTEM_PROMPT": "You extract expense data from emails. Be creative and infer intent from each full email description to assign the most appropriate category from the provided list. Return only a JSON array where each item has keys: date, amount, category, description.",
+        "OPENAI_USER_PROMPT_TEMPLATE": "Categories: {{categories}}\\n\\nEmails JSON array:\\n{{emails_json}}\\n\\nRules:\\n- Return exactly one parsed object per input email, preserving the same order.\\n- Use each email date when possible.\\n- amount should include currency symbol if present.\\n- category should be one of the provided categories when possible.\\n- description should be short and concrete.\\n- If any field is unknown, use an empty string."
     }
 }

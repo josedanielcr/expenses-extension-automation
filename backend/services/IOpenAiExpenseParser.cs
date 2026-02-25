@@ -1,7 +1,7 @@
 public interface IOpenAiExpenseParser
 {
-    Task<ExpenseParseResult> ParseAsync(
-        EmailEntry email,
+    Task<List<ExpenseParseResult>> ParseBatchAsync(
+        IReadOnlyList<EmailEntry> emails,
         IReadOnlyCollection<string> categories,
         CancellationToken ct = default);
 }

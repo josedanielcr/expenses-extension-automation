@@ -37,6 +37,60 @@ function readHeader(payload, name) {
   return found?.value || "";
 }
 
+function decodeBase64Url(data) {
+  if (!data) return "";
+  const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  try {
+    return atob(padded);
+  } catch {
+    return "";
+  }
+}
+
+function collectBodyParts(payload, mimeType) {
+  const results = [];
+  const walk = (part) => {
+    if (!part) return;
+    const currentMimeType = (part.mimeType || "").toLowerCase();
+    if (currentMimeType === mimeType && part.body?.data) {
+      results.push(decodeBase64Url(part.body.data));
+    }
+    for (const child of part.parts || []) {
+      walk(child);
+    }
+  };
+  walk(payload);
+  return results.join("\n").trim();
+}
+
+function htmlToText(html) {
+  if (!html) return "";
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractMessageText(payload) {
+  if (!payload) return "";
+
+  const plainText = collectBodyParts(payload, "text/plain");
+  if (plainText) return plainText;
+
+  const htmlText = collectBodyParts(payload, "text/html");
+  if (htmlText) return htmlToText(htmlText);
+
+  if (payload.body?.data) return decodeBase64Url(payload.body.data).trim();
+  return "";
+}
+
 async function findLabelIdByName(token, labelName) {
   const data = await gmailRequest(token, "users/me/labels");
   const labels = data.labels || [];
@@ -69,18 +123,13 @@ async function listAllMessagesByLabel(token, labelId) {
 
 async function fetchMessageMetadata(token, messageId) {
   const data = await gmailRequest(token, `users/me/messages/${messageId}`, {
-    format: "metadata",
-    metadataHeaders: "From",
+    format: "full",
   });
 
   return {
-    id: data.id,
-    threadId: data.threadId,
-    snippet: data.snippet || "",
-    internalDate: data.internalDate || "",
-    from: readHeader(data.payload, "From"),
-    subject: readHeader(data.payload, "Subject"),
+    sender: readHeader(data.payload, "From"),
     date: readHeader(data.payload, "Date"),
+    message: extractMessageText(data.payload),
   };
 }
 

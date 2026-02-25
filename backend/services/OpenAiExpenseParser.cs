@@ -11,7 +11,6 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string ChatCompletionsUrl = "https://api.openai.com/v1/chat/completions";
     private const string BearerScheme = "Bearer";
     private const string JsonMediaType = "application/json";
-    private const string JsonObjectType = "json_object";
     private const string OpenAiSecretName = "openai-api-key";
     private const string DefaultModel = "gpt-4o-mini";
     private const double DefaultTemperature = 1;
@@ -23,18 +22,17 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string ConfigUserPromptTemplate = "OPENAI_USER_PROMPT_TEMPLATE";
     private const string DefaultCategoriesText = "No categories provided.";
     private const string DefaultSystemPrompt =
-        "You extract expense data from emails. Return valid JSON only with keys: date, amount, category, description.";
+        "You extract expense data from emails. Return only a JSON array where each item has keys: date, amount, category, description.";
     private const string DefaultUserPromptTemplate =
-        "Categories: {{categories}}\n" +
-        "Sender: {{sender}}\n" +
-        "Date: {{date}}\n" +
-        "Message:\n" +
-        "{{message}}\n\n" +
+        "Categories: {{categories}}\n\n" +
+        "Emails JSON array:\n{{emails_json}}\n\n" +
         "Rules:\n" +
-        "- Use provided date when possible.\n" +
+        "- Return a JSON array with exactly one parsed object per input email in the same order.\n" +
+        "- Use each email date when possible.\n" +
         "- amount should include currency symbol if present.\n" +
         "- category should be one of the provided categories when possible.\n" +
-        "- description should be short and concrete.";
+        "- description should be short and concrete.\n" +
+        "- If data is missing, use empty strings.";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -57,24 +55,23 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         _logger = logger;
     }
 
-    public async Task<ExpenseParseResult> ParseAsync(
-        EmailEntry email,
+    public async Task<List<ExpenseParseResult>> ParseBatchAsync(
+        IReadOnlyList<EmailEntry> emails,
         IReadOnlyCollection<string> categories,
         CancellationToken ct = default)
     {
+        if (emails.Count == 0)
+            return [];
+
         var apiKey = await GetApiKeyAsync(ct);
         var model = GetConfiguredModel();
         var systemPrompt = GetConfiguredSystemPrompt();
-        var userPrompt = BuildUserPrompt(email, categories);
+        var userPrompt = BuildUserPrompt(emails, categories);
 
         using var request = BuildChatCompletionsRequest(apiKey, model, systemPrompt, userPrompt);
         var responseBody = await SendRequestAndReadBodyAsync(request, ct);
-        var result = ParseModelResult(responseBody);
-
-        if (string.IsNullOrWhiteSpace(result.Date))
-            result.Date = email.Date;
-
-        return result;
+        var parsed = ParseModelResult(responseBody);
+        return NormalizeResults(parsed, emails);
     }
 
     private async Task<string> GetApiKeyAsync(CancellationToken ct)
@@ -120,18 +117,17 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private string GetConfiguredSystemPrompt()
         => _configuration[ConfigSystemPrompt] ?? DefaultSystemPrompt;
 
-    private string BuildUserPrompt(EmailEntry email, IReadOnlyCollection<string> categories)
+    private string BuildUserPrompt(IReadOnlyList<EmailEntry> emails, IReadOnlyCollection<string> categories)
     {
         var template = _configuration[ConfigUserPromptTemplate] ?? DefaultUserPromptTemplate;
         var categoryText = categories.Count > 0
             ? string.Join(", ", categories)
             : DefaultCategoriesText;
+        var emailsJson = JsonSerializer.Serialize(emails);
 
         return template
             .Replace("{{categories}}", categoryText, StringComparison.Ordinal)
-            .Replace("{{sender}}", email.Sender ?? string.Empty, StringComparison.Ordinal)
-            .Replace("{{date}}", email.Date ?? string.Empty, StringComparison.Ordinal)
-            .Replace("{{message}}", email.Message ?? string.Empty, StringComparison.Ordinal);
+            .Replace("{{emails_json}}", emailsJson, StringComparison.Ordinal);
     }
 
     private HttpRequestMessage BuildChatCompletionsRequest(
@@ -144,7 +140,6 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         {
             model,
             temperature = DefaultTemperature,
-            response_format = new { type = JsonObjectType },
             messages = new object[]
             {
                 new { role = "system", content = systemPrompt },
@@ -172,7 +167,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         return body;
     }
 
-    private static ExpenseParseResult ParseModelResult(string responseBody)
+    private static List<ExpenseParseResult> ParseModelResult(string responseBody)
     {
         using var doc = JsonDocument.Parse(responseBody);
         var content = doc.RootElement
@@ -184,7 +179,35 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         if (string.IsNullOrWhiteSpace(content))
             throw new InvalidOperationException("OpenAI returned an empty response.");
 
-        return JsonSerializer.Deserialize<ExpenseParseResult>(content, JsonOptions)
-            ?? throw new InvalidOperationException("OpenAI returned invalid JSON object.");
+        var asArray = JsonSerializer.Deserialize<List<ExpenseParseResult>>(content, JsonOptions);
+        if (asArray is not null)
+            return asArray;
+
+        throw new InvalidOperationException("OpenAI returned invalid JSON array.");
+    }
+
+    private static List<ExpenseParseResult> NormalizeResults(
+        IReadOnlyList<ExpenseParseResult> modelResults,
+        IReadOnlyList<EmailEntry> sourceEmails)
+    {
+        var normalized = new List<ExpenseParseResult>(sourceEmails.Count);
+
+        for (var i = 0; i < sourceEmails.Count; i++)
+        {
+            var source = sourceEmails[i];
+            var fromModel = i < modelResults.Count ? modelResults[i] : null;
+
+            var result = fromModel ?? new ExpenseParseResult();
+            if (string.IsNullOrWhiteSpace(result.Date))
+                result.Date = source.Date ?? string.Empty;
+
+            result.Amount ??= string.Empty;
+            result.Category ??= string.Empty;
+            result.Description ??= string.Empty;
+
+            normalized.Add(result);
+        }
+
+        return normalized;
     }
 }

@@ -103,30 +103,9 @@ public class OnEmailPush
         IReadOnlyCollection<string> categories,
         CancellationToken ct)
     {
-        var parsedEntries = new List<ExpenseParseResult>(emails.Count);
-        foreach (var email in emails)
-        {
-            if (string.IsNullOrWhiteSpace(email.Message))
-            {
-                parsedEntries.Add(CreateEmptyResult(email.Date));
-                continue;
-            }
-
-            var parsed = await _expenseParser.ParseAsync(email, categories, ct);
-            parsedEntries.Add(parsed);
-        }
-
-        return parsedEntries;
+        var emailList = emails as IReadOnlyList<EmailEntry> ?? emails.ToList();
+        return await _expenseParser.ParseBatchAsync(emailList, categories, ct);
     }
-
-    private static ExpenseParseResult CreateEmptyResult(string date) =>
-        new()
-        {
-            Date = date,
-            Amount = string.Empty,
-            Category = string.Empty,
-            Description = string.Empty,
-        };
 
     private static IActionResult BuildBadRequest(string message) =>
         new BadRequestObjectResult(new { error = message });
