@@ -1,3 +1,6 @@
+const ON_EMAIL_PUSH_URL =
+  "https://email-processor-ai-angubybzh5feb8ce.canadacentral-01.azurewebsites.net/api/OnEmailPush";
+
 async function getAuthToken(interactive) {
   return await chrome.identity.getAuthToken({ interactive });
 }
@@ -156,7 +159,38 @@ async function extractEmailsFromLabel(labelName) {
     emails.push(await fetchMessageMetadata(token, msg.id));
   }
 
-  return { labelName, labelId, total: emails.length, emails };
+  return { labelName, labelId, total: emails.length, emails, token };
+}
+
+async function pushEmailsToBackend(token, emails, categories = []) {
+  const res = await fetch(ON_EMAIL_PUSH_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      emails,
+      categories,
+    }),
+  });
+
+  const text = await res.text();
+  let body = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text;
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      `OnEmailPush failed: ${res.status} ${typeof body === "string" ? body : JSON.stringify(body)}`,
+    );
+  }
+
+  return body;
 }
 
 async function fetchUserInfo(token) {
@@ -217,15 +251,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       }
 
       if (msg.type === "EXTRACT_EMAILS_FROM_LABEL") {
-        const { sourceLabel = "ToParse" } = await chrome.storage.sync.get([
+        const { sourceLabel = "ToParse", categories = [] } = await chrome.storage.sync.get([
           "sourceLabel",
+          "categories",
         ]);
         const labelName = msg.labelName || sourceLabel || "ToParse";
         const extraction = await extractEmailsFromLabel(labelName);
+        const parsedResult = await pushEmailsToBackend(
+          extraction.token,
+          extraction.emails,
+          categories,
+        );
+        console.log("OnEmailPush parsed result:", parsedResult);
         sendResponse({
           ok: true,
           labelName: extraction.labelName,
           total: extraction.total,
+          parsed: parsedResult,
         });
         return;
       }

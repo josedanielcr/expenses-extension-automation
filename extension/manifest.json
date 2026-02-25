@@ -11,7 +11,10 @@
   },
 
   "permissions": ["storage", "identity", "tabs"],
-  "host_permissions": ["https://www.googleapis.com/*"],
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://email-processor-ai-angubybzh5feb8ce.canadacentral-01.azurewebsites.net/*"
+  ],
 
   "oauth2": {
     "client_id": "941118571900-nggnu109q2tbad6g1v1jeosvbv99sf3f.apps.googleusercontent.com",

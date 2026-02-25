@@ -69,9 +69,16 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         var userPrompt = BuildUserPrompt(emails, categories);
 
         using var request = BuildChatCompletionsRequest(apiKey, model, systemPrompt, userPrompt);
+        try
+        {
         var responseBody = await SendRequestAndReadBodyAsync(request, ct);
         var parsed = ParseModelResult(responseBody);
         return NormalizeResults(parsed, emails);
+        } catch (Exception ex)
+        {
+               _logger.LogError(ex, "Unhandled exception in OnEmailPush. InvocationId={InvocationId}");
+        }
+        return null;
     }
 
     private async Task<string> GetApiKeyAsync(CancellationToken ct)
