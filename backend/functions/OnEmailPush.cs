@@ -35,27 +35,53 @@ public class OnEmailPush
     [Function(FunctionName)]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, HttpMethodPost)] HttpRequest req,
+        FunctionContext context,
         CancellationToken ct)
     {
-        var readResult = await TryReadRequestAsync(req, ct);
-        if (readResult.Error is not null)
-            return readResult.Error;
+        try
+        {
+            var readResult = await TryReadRequestAsync(req, ct);
+            if (readResult.Error is not null)
+                return readResult.Error;
 
-        var payload = readResult.Payload!;
-        var token = ExtractTokenFromAuthorizationHeader(req);
-        if (string.IsNullOrWhiteSpace(token))
-            return BuildBadRequest(ErrorTokenRequired);
+            var payload = readResult.Payload!;
+            _logger.LogInformation(
+                "OnEmailPush request received. InvocationId={InvocationId} Emails={EmailCount} Categories={CategoryCount}",
+                context.InvocationId,
+                payload.Emails.Count,
+                payload.Categories.Count);
 
-        var payloadValidationError = ValidateRequest(payload);
-        if (payloadValidationError is not null)
-            return payloadValidationError;
+            var token = ExtractTokenFromAuthorizationHeader(req);
+            if (string.IsNullOrWhiteSpace(token))
+                return BuildBadRequest(ErrorTokenRequired);
 
-        var tokenValidationError = await ValidateTokenAsync(token, ct);
-        if (tokenValidationError is not null)
-            return tokenValidationError;
+            var payloadValidationError = ValidateRequest(payload);
+            if (payloadValidationError is not null)
+                return payloadValidationError;
 
-        var parsedEntries = await ParseEmailsAsync(payload.Emails, payload.Categories, ct);
-        return BuildSuccessResponse(parsedEntries);
+            var tokenValidationError = await ValidateTokenAsync(token, ct);
+            if (tokenValidationError is not null)
+                return tokenValidationError;
+
+            var parsedEntries = await ParseEmailsAsync(payload.Emails, payload.Categories, ct);
+            _logger.LogInformation(
+                "OnEmailPush completed. InvocationId={InvocationId} ParsedEntries={ParsedCount}",
+                context.InvocationId,
+                parsedEntries.Count);
+
+            return BuildSuccessResponse(parsedEntries);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Unhandled exception in OnEmailPush. InvocationId={InvocationId}",
+                context.InvocationId);
+            return new ObjectResult(new { error = "Internal server error while processing emails." })
+            {
+                StatusCode = StatusCodes.Status500InternalServerError,
+            };
+        }
     }
 
     private async Task<(OnEmailPushRequest? Payload, IActionResult? Error)> TryReadRequestAsync(

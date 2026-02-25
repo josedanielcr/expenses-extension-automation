@@ -33,6 +33,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         "- category should be one of the provided categories when possible.\n" +
         "- description should be short and concrete.\n" +
         "- If data is missing, use empty strings.";
+    private const int LogPreviewLength = 1200;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -67,18 +68,35 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         var model = GetConfiguredModel();
         var systemPrompt = GetConfiguredSystemPrompt();
         var userPrompt = BuildUserPrompt(emails, categories);
+        _logger.LogInformation(
+            "OpenAI batch parse started. Emails={EmailCount} Categories={CategoryCount} Model={Model} PromptChars={PromptChars}",
+            emails.Count,
+            categories.Count,
+            model,
+            userPrompt.Length);
 
         using var request = BuildChatCompletionsRequest(apiKey, model, systemPrompt, userPrompt);
+        var responseBody = await SendRequestAndReadBodyAsync(request, ct);
+        _logger.LogInformation("OpenAI raw response received. Chars={ResponseChars}", responseBody.Length);
+
         try
         {
-        var responseBody = await SendRequestAndReadBodyAsync(request, ct);
-        var parsed = ParseModelResult(responseBody);
-        return NormalizeResults(parsed, emails);
-        } catch (Exception ex)
-        {
-               _logger.LogError(ex, "Unhandled exception in OnEmailPush. InvocationId={InvocationId}");
+            var parsed = ParseModelResult(responseBody);
+            var normalized = NormalizeResults(parsed, emails);
+            _logger.LogInformation(
+                "OpenAI batch parse completed. Parsed={ParsedCount} Normalized={NormalizedCount}",
+                parsed.Count,
+                normalized.Count);
+            return normalized;
         }
-        return null;
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed parsing OpenAI response. ResponsePreview={ResponsePreview}",
+                Truncate(responseBody, LogPreviewLength));
+            throw;
+        }
     }
 
     private async Task<string> GetApiKeyAsync(CancellationToken ct)
@@ -177,18 +195,46 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private static List<ExpenseParseResult> ParseModelResult(string responseBody)
     {
         using var doc = JsonDocument.Parse(responseBody);
-        var content = doc.RootElement
+        var message = doc.RootElement
             .GetProperty("choices")[0]
-            .GetProperty("message")
-            .GetProperty("content")
-            .GetString();
+            .GetProperty("message");
+        var content = ExtractAssistantContent(message);
 
         if (string.IsNullOrWhiteSpace(content))
             throw new InvalidOperationException("OpenAI returned an empty response.");
 
-        var asArray = JsonSerializer.Deserialize<List<ExpenseParseResult>>(content, JsonOptions);
+        var cleaned = StripJsonCodeFences(content);
+
+        var asArray = JsonSerializer.Deserialize<List<ExpenseParseResult>>(cleaned, JsonOptions);
         if (asArray is not null)
             return asArray;
+
+        using var contentDoc = JsonDocument.Parse(cleaned);
+        var root = contentDoc.RootElement;
+
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            return JsonSerializer.Deserialize<List<ExpenseParseResult>>(root.GetRawText(), JsonOptions)
+                ?? throw new InvalidOperationException("OpenAI returned an invalid JSON array.");
+        }
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            if (TryGetArrayProperty(root, "entries", out var entriesArray) ||
+                TryGetArrayProperty(root, "results", out entriesArray) ||
+                TryGetArrayProperty(root, "data", out entriesArray))
+            {
+                return JsonSerializer.Deserialize<List<ExpenseParseResult>>(entriesArray.GetRawText(), JsonOptions)
+                    ?? throw new InvalidOperationException("OpenAI returned invalid entries array.");
+            }
+
+            if (LooksLikeExpenseObject(root))
+            {
+                var single = JsonSerializer.Deserialize<ExpenseParseResult>(root.GetRawText(), JsonOptions)
+                    ?? throw new InvalidOperationException("OpenAI returned invalid expense object.");
+                return [single];
+            }
+        }
 
         throw new InvalidOperationException("OpenAI returned invalid JSON array.");
     }
@@ -216,5 +262,79 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         }
 
         return normalized;
+    }
+
+    private static string ExtractAssistantContent(JsonElement messageElement)
+    {
+        if (!messageElement.TryGetProperty("content", out var contentElement))
+            return string.Empty;
+
+        if (contentElement.ValueKind == JsonValueKind.String)
+            return contentElement.GetString() ?? string.Empty;
+
+        if (contentElement.ValueKind == JsonValueKind.Array)
+        {
+            var parts = new List<string>();
+            foreach (var part in contentElement.EnumerateArray())
+            {
+                if (part.ValueKind == JsonValueKind.Object &&
+                    part.TryGetProperty("text", out var textElement) &&
+                    textElement.ValueKind == JsonValueKind.String)
+                {
+                    var text = textElement.GetString();
+                    if (!string.IsNullOrWhiteSpace(text))
+                        parts.Add(text);
+                }
+            }
+
+            return string.Join("\n", parts);
+        }
+
+        return contentElement.GetRawText();
+    }
+
+    private static string StripJsonCodeFences(string content)
+    {
+        var trimmed = content.Trim();
+        if (!trimmed.StartsWith("```", StringComparison.Ordinal))
+            return trimmed;
+
+        var firstLineBreak = trimmed.IndexOf('\n');
+        if (firstLineBreak < 0)
+            return trimmed.Trim('`').Trim();
+
+        var lastFence = trimmed.LastIndexOf("```", StringComparison.Ordinal);
+        if (lastFence <= firstLineBreak)
+            return trimmed[(firstLineBreak + 1)..].Trim();
+
+        return trimmed[(firstLineBreak + 1)..lastFence].Trim();
+    }
+
+    private static bool TryGetArrayProperty(JsonElement root, string propertyName, out JsonElement arrayElement)
+    {
+        if (root.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.Array)
+        {
+            arrayElement = value;
+            return true;
+        }
+
+        arrayElement = default;
+        return false;
+    }
+
+    private static bool LooksLikeExpenseObject(JsonElement root)
+    {
+        return root.TryGetProperty("date", out _) ||
+               root.TryGetProperty("amount", out _) ||
+               root.TryGetProperty("category", out _) ||
+               root.TryGetProperty("description", out _);
+    }
+
+    private static string Truncate(string value, int maxChars)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= maxChars)
+            return value;
+
+        return value[..maxChars];
     }
 }
