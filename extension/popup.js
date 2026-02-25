@@ -11,10 +11,6 @@ const MESSAGE_TYPES = {
   SYNC_PROGRESS: "SYNC_PROGRESS",
 };
 
-const ROUTES = {
-  OPTIONS_PAGE: "options.html",
-};
-
 const TEXT = {
   UNKNOWN_ERROR: "error desconocido",
   NOT_SIGNED_IN: "Sin sesión iniciada",
@@ -150,7 +146,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   openSettingsBtn.addEventListener("click", () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL(ROUTES.OPTIONS_PAGE) });
+    chrome.runtime.openOptionsPage();
   });
 
   syncBtn.addEventListener("click", async () => {

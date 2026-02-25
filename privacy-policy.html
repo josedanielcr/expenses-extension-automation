@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Gastos — Privacy Policy</title>
+    <style>
+      :root {
+        --bg0: #020f22;
+        --bg1: #072952;
+        --glass: rgba(14, 42, 79, 0.55);
+        --glass-border: rgba(132, 195, 255, 0.24);
+        --text-main: #e8f3ff;
+        --text-muted: #acc6e3;
+        --accent: #8fd0ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text-main);
+        font-family: "Avenir Next", "Nunito", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(110% 110% at 0% 0%, #104f97 0%, transparent 50%),
+          radial-gradient(120% 120% at 100% 100%, #073870 0%, transparent 56%),
+          linear-gradient(170deg, var(--bg1), var(--bg0) 62%);
+      }
+
+      .bg-orb {
+        position: fixed;
+        border-radius: 999px;
+        filter: blur(8px);
+        pointer-events: none;
+      }
+
+      .orb-a {
+        width: 220px;
+        height: 220px;
+        left: -70px;
+        top: -70px;
+        background: rgba(93, 161, 255, 0.3);
+      }
+
+      .orb-b {
+        width: 280px;
+        height: 280px;
+        right: -120px;
+        bottom: -140px;
+        background: rgba(29, 95, 202, 0.45);
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 28px auto;
+        padding: 0 18px 28px;
+        position: relative;
+        z-index: 2;
+      }
+
+      .hero {
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 18px;
+        background: var(--glass);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow:
+          0 12px 30px rgba(2, 10, 24, 0.42),
+          inset 0 1px 0 rgba(168, 214, 255, 0.18);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 30px;
+      }
+
+      .updated {
+        margin-top: 8px;
+        color: var(--text-muted);
+      }
+
+      .intro {
+        margin-top: 12px;
+        line-height: 1.55;
+      }
+
+      .card {
+        margin-top: 12px;
+        border: 1px solid var(--glass-border);
+        border-radius: 14px;
+        padding: 14px;
+        background: var(--glass);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+
+      h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+
+      p,
+      li {
+        color: var(--text-muted);
+        line-height: 1.55;
+      }
+
+      ul {
+        margin: 8px 0 0 20px;
+        padding: 0;
+      }
+
+      .highlight {
+        color: var(--accent);
+      }
+
+      a {
+        color: #a7dbff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+
+    <main class="container">
+      <section class="hero">
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: [Fecha]</p>
+        <p class="intro">
+          AI Gastos ("the Extension") respects your privacy and is committed to protecting your
+          information.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>1. Information We Access</h2>
+        <p>With the user's explicit authorization, the Extension may access:</p>
+        <ul>
+          <li>Email content from Gmail messages related to financial transactions</li>
+          <li>
+            Transaction-related financial data (such as merchant name, amount, date)
+          </li>
+          <li>Google account email address (for authentication)</li>
+          <li>Google Sheets identifiers selected by the user</li>
+        </ul>
+        <p>
+          The Extension does not access passwords, authentication credentials, unrelated emails, or
+          browsing history.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>2. How We Use the Information</h2>
+        <p>The accessed information is used exclusively to:</p>
+        <ul>
+          <li>Detect transaction-related emails</li>
+          <li>Extract structured expense information</li>
+          <li>Categorize transactions using AI-based processing</li>
+          <li>Sync the structured expense data into a Google Sheet selected by the user</li>
+        </ul>
+        <p>The data is used solely to provide the core functionality of the Extension.</p>
+      </section>
+
+      <section class="card">
+        <h2>3. AI Processing</h2>
+        <p>
+          To extract and categorize transaction information, relevant portions of email content may
+          be securely transmitted to a backend service controlled by the developer.
+        </p>
+        <p>The backend service may use OpenAI's API to process and structure the data.</p>
+        <p>The data is:</p>
+        <ul>
+          <li>Used only for processing the user's request</li>
+          <li>Not sold or shared for advertising purposes</li>
+          <li>Not used for profiling unrelated to the Extension's functionality</li>
+        </ul>
+        <p>
+          No personal data is intentionally stored beyond what is necessary to provide the
+          requested service.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>4. Data Sharing</h2>
+        <p>The Extension does not sell, rent, or trade user data.</p>
+        <p>Data is transmitted only to:</p>
+        <ul>
+          <li>Google APIs (Gmail and Google Sheets)</li>
+          <li>The developer's backend processing service</li>
+          <li>OpenAI API strictly for structured data extraction</li>
+        </ul>
+        <p>All transmissions occur over secure HTTPS connections.</p>
+      </section>
+
+      <section class="card">
+        <h2>5. Data Storage</h2>
+        <p>
+          User preferences are stored locally using Chrome storage.
+        </p>
+        <p>
+          Personal email content is not permanently stored unless required for core functionality.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>6. User Control</h2>
+        <p>Users may:</p>
+        <ul>
+          <li>Revoke Google permissions at any time</li>
+          <li>Uninstall the Extension</li>
+          <li>Contact the developer for data deletion requests</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>7. Contact</h2>
+        <p>
+          For privacy-related inquiries:
+          <span class="highlight">aigastosapp@gmail.com</span>
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -10,7 +10,7 @@
     "service_worker": "background.js"
   },
 
-  "permissions": ["storage", "identity", "tabs"],
+  "permissions": ["storage", "identity"],
   "host_permissions": [
     "https://www.googleapis.com/*",
     "https://email-processor-ai-angubybzh5feb8ce.canadacentral-01.azurewebsites.net/*"
