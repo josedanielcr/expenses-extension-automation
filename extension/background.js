@@ -4,6 +4,7 @@ importScripts(
   "background/handlers/authSignOut.js",
   "background/handlers/extractEmailsFromLabel.js",
   "background/handlers/syncEmailsToSheet.js",
+  "background/handlers/moveEmailsToProcessedLabel.js",
 );
 
 const MESSAGE_TYPES = {

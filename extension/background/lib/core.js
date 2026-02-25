@@ -159,8 +159,65 @@ const BackgroundCore = {
     for (const msg of messageRefs) {
       emails.push(await BackgroundCore.fetchMessageMetadata(token, msg.id));
     }
+    const messageIds = messageRefs.map((m) => m.id).filter(Boolean);
 
-    return { labelName, labelId, total: emails.length, emails, token };
+    return { labelName, labelId, total: emails.length, emails, messageIds, token };
+  },
+
+  async createLabel(token, labelName) {
+    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: labelName,
+        labelListVisibility: "labelShow",
+        messageListVisibility: "show",
+      }),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`create label failed: ${res.status} ${text}`);
+    }
+
+    return text ? JSON.parse(text) : null;
+  },
+
+  async getOrCreateLabelId(token, labelName) {
+    const existing = await BackgroundCore.findLabelIdByName(token, labelName);
+    if (existing) return existing;
+
+    const created = await BackgroundCore.createLabel(token, labelName);
+    return created?.id || "";
+  },
+
+  async batchModifyMessageLabels(token, messageIds, addLabelIds = [], removeLabelIds = []) {
+    if (!messageIds?.length) return null;
+
+    const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/batchModify", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ids: messageIds,
+        addLabelIds,
+        removeLabelIds,
+      }),
+    });
+
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`batchModify failed: ${res.status} ${text}`);
+    }
+
+    return text ? JSON.parse(text) : {};
   },
 
   async pushEmailsToBackend(token, emails, categories = []) {

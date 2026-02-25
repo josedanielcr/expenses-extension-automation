@@ -4,11 +4,13 @@ async function handleExtractEmailsFromLabel(msg) {
     categories = [],
     sheetUrl = "",
     sheetTab = "draft",
+    processedLabel = "AI Processed",
   } = await chrome.storage.sync.get([
     "sourceLabel",
     "categories",
     "sheetUrl",
     "sheetTab",
+    "processedLabel",
   ]);
   const labelName = msg.labelName || sourceLabel || "ToParse";
   const extraction = await BackgroundCore.extractEmailsFromLabel(labelName);
@@ -23,6 +25,14 @@ async function handleExtractEmailsFromLabel(msg) {
     sheetUrl,
     sheetTab,
   );
+  if (sheetWriteResult) {
+    const labelMoveResult = await moveEmailsToProcessedLabel(
+      extraction,
+      sourceLabel,
+      processedLabel,
+    );
+    console.log("Gmail label move result:", labelMoveResult);
+  }
 
   const rowsAppended = (parsedResult?.entries || []).length;
 
