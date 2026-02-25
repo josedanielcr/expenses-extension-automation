@@ -1,34 +1,89 @@
 :root {
-  --border: #e5e7eb;
-  --muted: #6b7280;
+  --bg0: #020f22;
+  --bg1: #072952;
+  --glass: rgba(14, 42, 79, 0.55);
+  --glass-border: rgba(132, 195, 255, 0.24);
+  --text-main: #e8f3ff;
+  --text-muted: #acc6e3;
+  --field-bg: rgba(8, 30, 58, 0.66);
+  --field-border: rgba(162, 207, 250, 0.24);
+  --btn-muted: rgba(145, 171, 197, 0.28);
+  --btn-primary: #2f86ff;
+  --btn-primary-strong: #1f72e4;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  font-family:
-    system-ui,
-    -apple-system,
-    Segoe UI,
-    Roboto,
-    sans-serif;
+  font-family: "Avenir Next", "Nunito", "Segoe UI", sans-serif;
   margin: 0;
-  background: #fafafa;
+  color: var(--text-main);
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(110% 110% at 0% 0%, #104f97 0%, transparent 50%),
+    radial-gradient(120% 120% at 100% 100%, #073870 0%, transparent 56%),
+    linear-gradient(170deg, var(--bg1), var(--bg0) 62%);
 }
+
+.bg-orb {
+  position: fixed;
+  border-radius: 999px;
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+.orb-a {
+  width: 220px;
+  height: 220px;
+  left: -70px;
+  top: -70px;
+  background: rgba(93, 161, 255, 0.3);
+}
+
+.orb-b {
+  width: 280px;
+  height: 280px;
+  right: -120px;
+  bottom: -140px;
+  background: rgba(29, 95, 202, 0.45);
+}
+
 .container {
   max-width: 760px;
   margin: 24px auto;
-  padding: 0 16px;
+  padding: 0 16px 26px;
+  position: relative;
+  z-index: 2;
 }
 
 h2 {
-  margin: 0 0 12px;
+  margin: 0;
+  font-size: 28px;
+}
+
+.sub {
+  margin: 6px 0 16px;
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
 .card {
-  background: white;
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
   padding: 14px;
   margin: 12px 0;
+  box-shadow:
+    0 12px 30px rgba(2, 10, 24, 0.42),
+    inset 0 1px 0 rgba(168, 214, 255, 0.18);
+}
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 h3 {
@@ -40,17 +95,40 @@ label {
   display: block;
   font-size: 13px;
   margin: 10px 0;
+  color: var(--text-muted);
 }
+
+.hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #9ec0e4;
+}
+
 input,
 textarea {
   width: 100%;
   margin-top: 6px;
   padding: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--field-border);
   border-radius: 10px;
   box-sizing: border-box;
   font-size: 14px;
-  background: white;
+  color: var(--text-main);
+  background: var(--field-bg);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #90aed0;
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(125, 196, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(54, 137, 231, 0.25);
 }
 
 .actions {
@@ -60,16 +138,30 @@ textarea {
   margin-top: 14px;
 }
 button {
-  border: 1px solid var(--border);
-  background: white;
+  border: 1px solid rgba(170, 209, 247, 0.24);
+  background: var(--btn-muted);
+  color: var(--text-main);
   border-radius: 10px;
   padding: 10px 14px;
   cursor: pointer;
+  font-weight: 650;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
 }
+
+button:hover {
+  transform: translateY(-1px);
+  background: rgba(168, 194, 220, 0.34);
+}
+
+button.primary {
+  background: linear-gradient(180deg, var(--btn-primary), var(--btn-primary-strong));
+  border-color: rgba(152, 210, 255, 0.42);
+}
+
 button.secondary {
-  background: #f3f4f6;
+  background: rgba(129, 149, 171, 0.35);
 }
 #status {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 13px;
 }

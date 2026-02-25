@@ -2,23 +2,39 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Gmail Sync MVP</title>
+    <title>Gastos Gmail</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
 
   <body>
-    <h3>Gmail Sync MVP</h3>
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
 
-    <div class="status" id="userLine"></div>
+    <main class="shell">
+      <header class="top">
+        <div class="brand">Sincronizador</div>
+        <button id="openSettings" class="icon-btn" aria-label="Abrir configuración">Ajustes</button>
+      </header>
 
-    <button id="signInBtn">Sign in with Google</button>
-    <button id="signOutBtn" disabled>Sign out</button>
+      <section class="glass card">
+        <div class="label">Cuenta</div>
+        <div class="status user-line" id="userLine"></div>
+        <div class="row">
+          <button id="signInBtn">Iniciar sesión</button>
+          <button id="signOutBtn" disabled>Cerrar sesión</button>
+        </div>
+      </section>
 
-    <button id="openSettings">Settings</button>
-
-    <button id="syncBtn" class="primary" disabled>Sync</button>
-
-    <div class="status" id="status"></div>
+      <section class="glass card">
+        <div class="label">Sincronización</div>
+        <button id="syncBtn" class="primary" disabled>Sincronizar gastos</button>
+        <div class="sync-feedback">
+          <span id="syncIndicator" class="sync-indicator" aria-hidden="true"></span>
+        </div>
+        <div id="processLog" class="process-log"></div>
+        <div class="status" id="status"></div>
+      </section>
+    </main>
 
     <script src="popup.js"></script>
   </body>

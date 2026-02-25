@@ -8,6 +8,7 @@ const MESSAGE_TYPES = {
   AUTH_SIGN_IN: "AUTH_SIGN_IN",
   AUTH_SIGN_OUT: "AUTH_SIGN_OUT",
   EXTRACT_EMAILS_FROM_LABEL: "EXTRACT_EMAILS_FROM_LABEL",
+  SYNC_PROGRESS: "SYNC_PROGRESS",
 };
 
 const ROUTES = {
@@ -15,17 +16,18 @@ const ROUTES = {
 };
 
 const TEXT = {
-  UNKNOWN_ERROR: "unknown error",
-  NOT_SIGNED_IN: "Not signed in",
-  SIGNED_IN_PREFIX: "Signed in: ",
-  SIGN_IN_TO_ENABLE_SYNC: "Sign in to enable sync",
-  READY_TO_EXTRACT: "Ready to extract emails (sheet not configured yet)",
-  READY_TO_SYNC: "Ready to sync",
-  SIGNING_IN: "Signing in...",
-  SIGNED_IN_SUCCESS: "Signed in",
-  SIGNING_OUT: "Signing out...",
-  SIGNED_OUT_SUCCESS: "Signed out",
-  FETCHING_LABELED_EMAILS: "Fetching labeled emails...",
+  UNKNOWN_ERROR: "error desconocido",
+  NOT_SIGNED_IN: "Sin sesión iniciada",
+  SIGNED_IN_PREFIX: "Sesión iniciada: ",
+  SIGN_IN_TO_ENABLE_SYNC: "Inicia sesión para habilitar la sincronización",
+  READY_TO_EXTRACT: "Listo para extraer correos (la hoja aún no está configurada)",
+  READY_TO_SYNC: "Listo para sincronizar",
+  SIGNING_IN: "Iniciando sesión...",
+  SIGNED_IN_SUCCESS: "Sesión iniciada",
+  SIGNING_OUT: "Cerrando sesión...",
+  SIGNED_OUT_SUCCESS: "Sesión cerrada",
+  FETCHING_LABELED_EMAILS: "Sincronizando correos y gastos...",
+  SYNC_SUCCESS_PREFIX: "Sincronizado",
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -36,9 +38,68 @@ document.addEventListener("DOMContentLoaded", async () => {
   const signOutBtn = document.getElementById("signOutBtn");
   const openSettingsBtn = document.getElementById("openSettings");
   const syncBtn = document.getElementById("syncBtn");
+  const syncIndicator = document.getElementById("syncIndicator");
+  const processLogEl = document.getElementById("processLog");
+
+  const stepOrder = ["extract", "ai", "sheet", "labels"];
+  const stepLabels = {
+    extract: "Leyendo correos",
+    ai: "Analizando gastos con IA",
+    sheet: "Guardando en Google Sheets",
+    labels: "Moviendo etiquetas",
+  };
+  let stepState = {};
 
   function setStatus(msg) {
     statusEl.textContent = msg;
+  }
+
+  function setSyncIndicator(state) {
+    syncIndicator.className = "sync-indicator";
+    if (state === "loading") syncIndicator.classList.add("loading");
+    if (state === "success") syncIndicator.classList.add("success");
+  }
+
+  function resetStepState() {
+    stepState = {
+      extract: { state: "pending", detail: "" },
+      ai: { state: "pending", detail: "" },
+      sheet: { state: "pending", detail: "" },
+      labels: { state: "pending", detail: "" },
+    };
+  }
+
+  function renderProcessLog() {
+    const escapeHtml = (value) =>
+      String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;");
+
+    const rows = stepOrder
+      .filter((key) => stepState[key]?.state !== "pending")
+      .map((key) => {
+        const info = stepState[key];
+        const stateClass = info.state === "running" ? "running" : "done";
+        const text = escapeHtml(info.detail || stepLabels[key]);
+        return `<div class="step ${stateClass}"><span class="step-dot"></span><span class="step-text">${text}</span></div>`;
+      })
+      .join("");
+
+    processLogEl.innerHTML = rows;
+  }
+
+  function updateStep(stage, state, detail) {
+    if (!stepState[stage]) return;
+    stepState[stage] = { state, detail: detail || "" };
+    renderProcessLog();
+  }
+
+  function clearProcessLogSoon() {
+    window.setTimeout(() => {
+      processLogEl.innerHTML = "";
+      resetStepState();
+    }, 1600);
   }
 
   async function refreshUI() {
@@ -70,7 +131,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setStatus(TEXT.SIGNING_IN);
     const res = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.AUTH_SIGN_IN });
     if (!res?.ok) {
-      setStatus(`Sign-in failed: ${res?.error || TEXT.UNKNOWN_ERROR}`);
+      setStatus(`Error al iniciar sesión: ${res?.error || TEXT.UNKNOWN_ERROR}`);
     } else {
       setStatus(TEXT.SIGNED_IN_SUCCESS);
     }
@@ -81,7 +142,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setStatus(TEXT.SIGNING_OUT);
     const res = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.AUTH_SIGN_OUT });
     if (!res?.ok) {
-      setStatus(`Sign-out failed: ${res?.error || TEXT.UNKNOWN_ERROR}`);
+      setStatus(`Error al cerrar sesión: ${res?.error || TEXT.UNKNOWN_ERROR}`);
     } else {
       setStatus(TEXT.SIGNED_OUT_SUCCESS);
     }
@@ -94,21 +155,37 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   syncBtn.addEventListener("click", async () => {
     try {
+      resetStepState();
+      renderProcessLog();
+      setSyncIndicator("loading");
       setStatus(TEXT.FETCHING_LABELED_EMAILS);
       const res = await chrome.runtime.sendMessage({
         type: MESSAGE_TYPES.EXTRACT_EMAILS_FROM_LABEL
       });
 
       if (!res?.ok) {
-        setStatus(`Sync failed: ${res?.error || TEXT.UNKNOWN_ERROR}`);
+        setSyncIndicator("idle");
+        setStatus(`Error al sincronizar: ${res?.error || TEXT.UNKNOWN_ERROR}`);
+        clearProcessLogSoon();
         return;
       }
 
-      setStatus(`Synced ${res.rowsAppended || 0} rows from "${res.labelName}"`);
+      setSyncIndicator("success");
+      updateStep("labels", "done", "Proceso finalizado");
+      setStatus(`${TEXT.SYNC_SUCCESS_PREFIX} ${res.rowsAppended || 0} filas desde "${res.labelName}"`);
+      clearProcessLogSoon();
     } catch (err) {
-      setStatus(`Sync failed: ${String(err?.message || err)}`);
+      setSyncIndicator("idle");
+      setStatus(`Error al sincronizar: ${String(err?.message || err)}`);
+      clearProcessLogSoon();
     }
   });
 
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.type !== MESSAGE_TYPES.SYNC_PROGRESS) return;
+    updateStep(msg.stage, msg.state, msg.detail);
+  });
+
+  resetStepState();
   await refreshUI();
 });

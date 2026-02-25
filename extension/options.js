@@ -10,8 +10,8 @@ const FIELD_IDS = {
 };
 
 const TEXT = {
-  SAVED: "Saved",
-  RESET: "Reset",
+  SAVED: "Guardado",
+  RESET: "Restablecido",
 };
 
 const UI = {

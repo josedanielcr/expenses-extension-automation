@@ -2,49 +2,57 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Gmail Sync — Settings</title>
+    <title>Gastos Gmail — Ajustes</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+
     <div class="container">
-      <h2>Gmail Sync — Settings</h2>
+      <h2>Ajustes de Gastos Gmail</h2>
+      <p class="sub">Configura etiquetas, destino de hoja y categorías de gasto.</p>
 
-      <div class="card">
-        <h3>Gmail Labels</h3>
-
+      <div class="card glass">
+        <h3>Etiquetas de Gmail</h3>
         <label>
-          Source label
+          Etiqueta de origen
           <input id="sourceLabel" placeholder="ToParse" />
+          <span class="hint">Etiqueta donde llegan los correos pendientes de procesar.</span>
         </label>
 
         <label>
-          Processed label
+          Etiqueta de procesados
           <input id="processedLabel" placeholder="AI Processed" />
+          <span class="hint">Etiqueta a la que se moverán los correos después de guardar en la hoja.</span>
         </label>
       </div>
 
-      <div class="card">
-        <h3>Google Sheet</h3>
+      <div class="card glass">
+        <h3>Google Sheets</h3>
 
         <label>
-          Spreadsheet URL
+          URL del spreadsheet
           <input id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." />
+          <span class="hint">Pega la URL completa del archivo de Google Sheets.</span>
         </label>
 
         <label>
-          Tab name
+          Nombre de la pestaña
           <input id="sheetTab" placeholder="draft" />
+          <span class="hint">Ejemplo: Gastos, Enero, Movimientos.</span>
         </label>
       </div>
 
-      <div class="card">
-        <h3>Categories (one per line)</h3>
+      <div class="card glass">
+        <h3>Categorías (una por línea)</h3>
         <textarea id="categories" rows="10" placeholder="supermarket&#10;restaurants&#10;subscriptions"></textarea>
+        <p class="hint">Estas categorías se envían al modelo para clasificar cada gasto.</p>
       </div>
 
       <div class="actions">
-        <button id="save">Save</button>
-        <button id="reset" class="secondary">Reset</button>
+        <button id="save" class="primary">Guardar</button>
+        <button id="reset" class="secondary">Restablecer</button>
         <span id="status"></span>
       </div>
     </div>
