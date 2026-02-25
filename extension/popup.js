@@ -104,7 +104,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
-      setStatus(`Fetched ${res.total} emails from "${res.labelName}"`);
+      setStatus(`Synced ${res.rowsAppended || 0} rows from "${res.labelName}"`);
     } catch (err) {
       setStatus(`Sync failed: ${String(err?.message || err)}`);
     }
