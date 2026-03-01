@@ -13,7 +13,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string JsonMediaType = "application/json";
     private const string OpenAiSecretName = "openai-api-key";
     private const string DefaultModel = "gpt-4o-mini";
-    private const double DefaultTemperature = 1;
+    private const double DefaultTemperature = 0;
     private const string ConfigOpenAiApiKey = "OPENAI_API_KEY";
     private const string ConfigOpenAiApiKeyFromVault = "openai-api-key";
     private const string ConfigKeyVaultUri = "KEY_VAULT_URI";
@@ -21,18 +21,6 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string ConfigSystemPrompt = "OPENAI_SYSTEM_PROMPT";
     private const string ConfigUserPromptTemplate = "OPENAI_USER_PROMPT_TEMPLATE";
     private const string DefaultCategoriesText = "No categories provided.";
-    private const string DefaultSystemPrompt =
-        "You extract expense data from emails. Return only a JSON array where each item has keys: date, amount, category, description.";
-    private const string DefaultUserPromptTemplate =
-        "Categories: {{categories}}\n\n" +
-        "Emails JSON array:\n{{emails_json}}\n\n" +
-        "Rules:\n" +
-        "- Return a JSON array with exactly one parsed object per input email in the same order.\n" +
-        "- Use each email date when possible.\n" +
-        "- amount should include currency symbol if present.\n" +
-        "- category should be one of the provided categories when possible.\n" +
-        "- description should be short and concrete.\n" +
-        "- If data is missing, use empty strings.";
     private const int LogPreviewLength = 1200;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -140,11 +128,20 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         => _configuration[ConfigOpenAiModel] ?? DefaultModel;
 
     private string GetConfiguredSystemPrompt()
-        => _configuration[ConfigSystemPrompt] ?? DefaultSystemPrompt;
+    {
+        var prompt = _configuration[ConfigSystemPrompt];
+        if (string.IsNullOrWhiteSpace(prompt))
+            throw new InvalidOperationException($"{ConfigSystemPrompt} is required.");
+
+        return prompt;
+    }
 
     private string BuildUserPrompt(IReadOnlyList<EmailEntry> emails, IReadOnlyCollection<string> categories)
     {
-        var template = _configuration[ConfigUserPromptTemplate] ?? DefaultUserPromptTemplate;
+        var template = _configuration[ConfigUserPromptTemplate];
+        if (string.IsNullOrWhiteSpace(template))
+            throw new InvalidOperationException($"{ConfigUserPromptTemplate} is required.");
+
         var categoryText = categories.Count > 0
             ? string.Join(", ", categories)
             : DefaultCategoriesText;
