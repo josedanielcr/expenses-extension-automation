@@ -15,6 +15,7 @@ if (useKeyVaultOnStartup && !string.IsNullOrWhiteSpace(keyVaultUri))
 }
 
 builder.ConfigureFunctionsWebApplication();
+builder.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 
 builder.Services
     .AddApplicationInsightsTelemetryWorkerService()

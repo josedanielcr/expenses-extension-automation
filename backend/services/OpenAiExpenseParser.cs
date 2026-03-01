@@ -12,8 +12,8 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string BearerScheme = "Bearer";
     private const string JsonMediaType = "application/json";
     private const string OpenAiSecretName = "openai-api-key";
-    private const string DefaultModel = "gpt-4o-mini";
-    private const double DefaultTemperature = 0;
+    private const string DefaultModel = "gpt-5-nano";
+    private const double DefaultTemperature = 1;
     private const string ConfigOpenAiApiKey = "OPENAI_API_KEY";
     private const string ConfigOpenAiApiKeyFromVault = "openai-api-key";
     private const string ConfigKeyVaultUri = "KEY_VAULT_URI";
@@ -26,6 +26,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
+        Converters = { new FlexibleStringJsonConverter() },
     };
 
     private readonly HttpClient _httpClient;
@@ -67,24 +68,13 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         var responseBody = await SendRequestAndReadBodyAsync(request, ct);
         _logger.LogInformation("OpenAI raw response received. Chars={ResponseChars}", responseBody.Length);
 
-        try
-        {
-            var parsed = ParseModelResult(responseBody);
-            var normalized = NormalizeResults(parsed, emails);
-            _logger.LogInformation(
-                "OpenAI batch parse completed. Parsed={ParsedCount} Normalized={NormalizedCount}",
-                parsed.Count,
-                normalized.Count);
-            return normalized;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Failed parsing OpenAI response. ResponsePreview={ResponsePreview}",
-                Truncate(responseBody, LogPreviewLength));
-            throw;
-        }
+        var parsed = ParseModelResult(responseBody);
+        var normalized = NormalizeResults(parsed, emails);
+        _logger.LogInformation(
+            "OpenAI batch parse completed. Parsed={ParsedCount} Normalized={NormalizedCount}",
+            parsed.Count,
+            normalized.Count);
+        return normalized;
     }
 
     private async Task<string> GetApiKeyAsync(CancellationToken ct)
@@ -200,12 +190,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         if (string.IsNullOrWhiteSpace(content))
             throw new InvalidOperationException("OpenAI returned an empty response.");
 
-        var cleaned = StripJsonCodeFences(content);
-
-        var asArray = JsonSerializer.Deserialize<List<ExpenseParseResult>>(cleaned, JsonOptions);
-        if (asArray is not null)
-            return asArray;
-
+        var cleaned = UnwrapJsonStringPayload(StripJsonCodeFences(content));
         using var contentDoc = JsonDocument.Parse(cleaned);
         var root = contentDoc.RootElement;
 
@@ -234,6 +219,26 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         }
 
         throw new InvalidOperationException("OpenAI returned invalid JSON array.");
+    }
+
+    private static string UnwrapJsonStringPayload(string content)
+    {
+        var current = content.Trim();
+
+        for (var i = 0; i < 3; i++)
+        {
+            using var doc = JsonDocument.Parse(current);
+            if (doc.RootElement.ValueKind != JsonValueKind.String)
+                return current;
+
+            var inner = doc.RootElement.GetString();
+            if (string.IsNullOrWhiteSpace(inner))
+                return string.Empty;
+
+            current = inner.Trim();
+        }
+
+        return current;
     }
 
     private static List<ExpenseParseResult> NormalizeResults(
