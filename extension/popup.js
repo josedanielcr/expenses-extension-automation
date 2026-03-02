@@ -2,6 +2,9 @@ const STORAGE_KEYS = {
   SHEET_URL: "sheetUrl",
   USER_EMAIL: "userEmail",
   USER_NAME: "userName",
+  USE_DATE_RANGE: "useDateRange",
+  START_DATE: "startDate",
+  END_DATE: "endDate",
 };
 
 const MESSAGE_TYPES = {
@@ -36,6 +39,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const syncBtn = document.getElementById("syncBtn");
   const syncIndicator = document.getElementById("syncIndicator");
   const processLogEl = document.getElementById("processLog");
+  const useDateRangeEl = document.getElementById("useDateRange");
+  const dateRangeFieldsEl = document.getElementById("dateRangeFields");
+  const startDateEl = document.getElementById("startDate");
+  const endDateEl = document.getElementById("endDate");
 
   const stepOrder = ["extract", "ai", "sheet", "labels"];
   const stepLabels = {
@@ -53,7 +60,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   function setSyncIndicator(state) {
     syncIndicator.className = "sync-indicator";
     if (state === "loading") syncIndicator.classList.add("loading");
-    if (state === "success") syncIndicator.classList.add("success");
   }
 
   function resetStepState() {
@@ -98,11 +104,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     }, 1600);
   }
 
+  function toggleDateRangeUI() {
+    const enabled = !!useDateRangeEl.checked;
+    dateRangeFieldsEl.classList.toggle("hidden", !enabled);
+  }
+
   async function refreshUI() {
-    const { sheetUrl, userEmail, userName } = await chrome.storage.sync.get([
+    const { sheetUrl, userEmail, userName, useDateRange, startDate, endDate } = await chrome.storage.sync.get([
       STORAGE_KEYS.SHEET_URL,
       STORAGE_KEYS.USER_EMAIL,
-      STORAGE_KEYS.USER_NAME
+      STORAGE_KEYS.USER_NAME,
+      STORAGE_KEYS.USE_DATE_RANGE,
+      STORAGE_KEYS.START_DATE,
+      STORAGE_KEYS.END_DATE,
     ]);
 
     const signedIn = !!userEmail;
@@ -121,6 +135,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!signedIn) setStatus(TEXT.SIGN_IN_TO_ENABLE_SYNC);
     else if (!sheetUrl) setStatus(TEXT.READY_TO_EXTRACT);
     else setStatus(TEXT.READY_TO_SYNC);
+
+    useDateRangeEl.checked = !!useDateRange;
+    startDateEl.value = startDate || "";
+    endDateEl.value = endDate || "";
+    toggleDateRangeUI();
   }
 
   signInBtn.addEventListener("click", async () => {
@@ -149,14 +168,48 @@ document.addEventListener("DOMContentLoaded", async () => {
     chrome.runtime.openOptionsPage();
   });
 
+  useDateRangeEl.addEventListener("change", async () => {
+    toggleDateRangeUI();
+    await chrome.storage.sync.set({
+      [STORAGE_KEYS.USE_DATE_RANGE]: useDateRangeEl.checked,
+    });
+  });
+
+  startDateEl.addEventListener("change", async () => {
+    await chrome.storage.sync.set({
+      [STORAGE_KEYS.START_DATE]: startDateEl.value || "",
+    });
+  });
+
+  endDateEl.addEventListener("change", async () => {
+    await chrome.storage.sync.set({
+      [STORAGE_KEYS.END_DATE]: endDateEl.value || "",
+    });
+  });
+
   syncBtn.addEventListener("click", async () => {
     try {
+      const useDateRange = !!useDateRangeEl.checked;
+      const startDate = startDateEl.value || "";
+      const endDate = endDateEl.value || "";
+      if (useDateRange) {
+        if (!startDate || !endDate) {
+          setStatus("Selecciona fecha inicial y final.");
+          return;
+        }
+        if (startDate > endDate) {
+          setStatus("La fecha inicial no puede ser mayor a la final.");
+          return;
+        }
+      }
+
       resetStepState();
       renderProcessLog();
       setSyncIndicator("loading");
       setStatus(TEXT.FETCHING_LABELED_EMAILS);
       const res = await chrome.runtime.sendMessage({
-        type: MESSAGE_TYPES.EXTRACT_EMAILS_FROM_LABEL
+        type: MESSAGE_TYPES.EXTRACT_EMAILS_FROM_LABEL,
+        dateRange: useDateRange ? { startDate, endDate } : null,
       });
 
       if (!res?.ok) {
@@ -166,7 +219,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
       }
 
-      setSyncIndicator("success");
+      setSyncIndicator("idle");
       updateStep("labels", "done", "Proceso finalizado");
       setStatus(`${TEXT.SYNC_SUCCESS_PREFIX} ${res.rowsAppended || 0} filas desde "${res.labelName}"`);
       clearProcessLogSoon();

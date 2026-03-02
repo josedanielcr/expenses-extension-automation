@@ -28,9 +28,14 @@ async function handleExtractEmailsFromLabel(msg) {
     "sheetTab",
     "processedLabel",
   ]);
+
+  const dateRange = msg?.dateRange || null;
   const labelName = msg.labelName || sourceLabel || "ToParse";
-  await emitSyncProgress("extract", "running", `Leyendo correos de "${labelName}"`);
-  const extraction = await BackgroundCore.extractEmailsFromLabel(labelName);
+  const rangeText = dateRange?.startDate && dateRange?.endDate
+    ? ` entre ${dateRange.startDate} y ${dateRange.endDate}`
+    : "";
+  await emitSyncProgress("extract", "running", `Leyendo correos de "${labelName}"${rangeText}`);
+  const extraction = await BackgroundCore.extractEmailsFromLabel(labelName, dateRange);
   await emitSyncProgress("extract", "done", `${extraction.total} correos encontrados`);
 
   await emitSyncProgress("ai", "running", "Analizando gastos con IA");

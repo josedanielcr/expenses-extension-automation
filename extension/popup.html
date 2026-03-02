@@ -28,6 +28,20 @@
       <section class="glass card">
         <div class="label">Sincronización</div>
         <button id="syncBtn" class="primary" disabled>Sincronizar gastos</button>
+        <label class="range-toggle">
+          <input id="useDateRange" type="checkbox" />
+          <span>Filtrar por rango de fechas</span>
+        </label>
+        <div id="dateRangeFields" class="date-range-fields hidden">
+          <label class="date-field">
+            <span>Desde</span>
+            <input id="startDate" type="date" />
+          </label>
+          <label class="date-field">
+            <span>Hasta</span>
+            <input id="endDate" type="date" />
+          </label>
+        </div>
         <div class="sync-feedback">
           <span id="syncIndicator" class="sync-indicator" aria-hidden="true"></span>
         </div>

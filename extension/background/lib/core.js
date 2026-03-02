@@ -107,13 +107,39 @@ const BackgroundCore = {
     return caseInsensitive?.id || null;
   },
 
-  async listAllMessagesByLabel(token, labelId) {
+  buildDateRangeQuery(dateRange) {
+    if (!dateRange) return "";
+
+    const startDate = String(dateRange.startDate || "").trim();
+    const endDate = String(dateRange.endDate || "").trim();
+    const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+    if (!isDate(startDate) || !isDate(endDate)) {
+      throw new Error("Invalid date range format. Use YYYY-MM-DD.");
+    }
+    if (startDate > endDate) {
+      throw new Error("Invalid date range. Start date must be before end date.");
+    }
+
+    const startLocal = new Date(`${startDate}T00:00:00`);
+    const endExclusiveLocal = new Date(`${endDate}T00:00:00`);
+    endExclusiveLocal.setDate(endExclusiveLocal.getDate() + 1);
+
+    // Gmail `after:` is strict. Subtract 1 second so start-day midnight is included.
+    const afterEpoch = Math.floor(startLocal.getTime() / 1000) - 1;
+    const beforeEpoch = Math.floor(endExclusiveLocal.getTime() / 1000);
+
+    return `after:${afterEpoch} before:${beforeEpoch}`;
+  },
+
+  async listAllMessagesByLabel(token, labelId, dateRange = null) {
     const messageRefs = [];
     let pageToken = null;
+    const query = BackgroundCore.buildDateRangeQuery(dateRange);
 
     do {
       const data = await BackgroundCore.gmailRequest(token, "users/me/messages", {
         labelIds: labelId,
+        q: query,
         maxResults: 100,
         pageToken,
       });
@@ -137,7 +163,7 @@ const BackgroundCore = {
     };
   },
 
-  async extractEmailsFromLabel(labelName) {
+  async extractEmailsFromLabel(labelName, dateRange = null) {
     const cachedTokenObject = await BackgroundCore.getAuthToken(false).catch(() => null);
     const interactiveTokenObject = !cachedTokenObject
       ? await BackgroundCore.getAuthToken(true)
@@ -154,7 +180,7 @@ const BackgroundCore = {
       throw new Error(`Label "${labelName}" was not found in Gmail.`);
     }
 
-    const messageRefs = await BackgroundCore.listAllMessagesByLabel(token, labelId);
+    const messageRefs = await BackgroundCore.listAllMessagesByLabel(token, labelId, dateRange);
     const emails = [];
     for (const msg of messageRefs) {
       emails.push(await BackgroundCore.fetchMessageMetadata(token, msg.id));

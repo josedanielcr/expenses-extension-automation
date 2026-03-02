@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ExpensIA",
   "version": "0.1.0",
-  "description": "ExpensIA: reads labeled emails, extracts expenses with AI, and writes to Google Sheets.",
+  "description": "ExpensIA: lee correos etiquetados, extrae gastos con IA y los guarda en Google Sheets.",
   "action": { "default_popup": "popup.html" },
   "options_page": "options.html",
 
