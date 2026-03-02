@@ -21,6 +21,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string ConfigSystemPrompt = "OPENAI_SYSTEM_PROMPT";
     private const string ConfigUserPromptTemplate = "OPENAI_USER_PROMPT_TEMPLATE";
     private const string DefaultCategoriesText = "No categories provided.";
+    private const string ExclusionRulesPlaceholder = "{{exclusion_rules_json}}";
     private const int LogPreviewLength = 1200;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -48,6 +49,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     public async Task<List<ExpenseParseResult>> ParseBatchAsync(
         IReadOnlyList<EmailEntry> emails,
         IReadOnlyCollection<string> categories,
+        IReadOnlyCollection<CategoryExclusionRule> exclusionRules,
         CancellationToken ct = default)
     {
         if (emails.Count == 0)
@@ -56,7 +58,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         var apiKey = await GetApiKeyAsync(ct);
         var model = GetConfiguredModel();
         var systemPrompt = GetConfiguredSystemPrompt();
-        var userPrompt = BuildUserPrompt(emails, categories);
+        var userPrompt = BuildUserPrompt(emails, categories, exclusionRules);
         _logger.LogInformation(
             "OpenAI batch parse started. Emails={EmailCount} Categories={CategoryCount} Model={Model} PromptChars={PromptChars}",
             emails.Count,
@@ -126,19 +128,27 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         return prompt;
     }
 
-    private string BuildUserPrompt(IReadOnlyList<EmailEntry> emails, IReadOnlyCollection<string> categories)
+    private string BuildUserPrompt(
+        IReadOnlyList<EmailEntry> emails,
+        IReadOnlyCollection<string> categories,
+        IReadOnlyCollection<CategoryExclusionRule> exclusionRules)
     {
         var template = _configuration[ConfigUserPromptTemplate];
         if (string.IsNullOrWhiteSpace(template))
             throw new InvalidOperationException($"{ConfigUserPromptTemplate} is required.");
+        if (!template.Contains(ExclusionRulesPlaceholder, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"{ConfigUserPromptTemplate} must include placeholder {ExclusionRulesPlaceholder}.");
 
         var categoryText = categories.Count > 0
             ? string.Join(", ", categories)
             : DefaultCategoriesText;
         var emailsJson = JsonSerializer.Serialize(emails);
+        var exclusionRulesJson = JsonSerializer.Serialize(exclusionRules ?? []);
 
         return template
             .Replace("{{categories}}", categoryText, StringComparison.Ordinal)
+            .Replace(ExclusionRulesPlaceholder, exclusionRulesJson, StringComparison.Ordinal)
             .Replace("{{emails_json}}", emailsJson, StringComparison.Ordinal);
     }
 

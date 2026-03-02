@@ -16,12 +16,14 @@ async function handleExtractEmailsFromLabel(msg) {
   const {
     sourceLabel = "ToParse",
     categories = [],
+    exclusionRules = [],
     sheetUrl = "",
     sheetTab = "draft",
     processedLabel = "AI Processed",
   } = await chrome.storage.sync.get([
     "sourceLabel",
     "categories",
+    "exclusionRules",
     "sheetUrl",
     "sheetTab",
     "processedLabel",
@@ -36,6 +38,7 @@ async function handleExtractEmailsFromLabel(msg) {
     extraction.token,
     extraction.emails,
     categories,
+    exclusionRules,
   );
   await emitSyncProgress("ai", "done", "Análisis completado");
 

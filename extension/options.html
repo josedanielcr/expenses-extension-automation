@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Gastos Gmail — Ajustes</title>
+    <title>ExpensIA - Ajustes</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
@@ -10,7 +10,7 @@
     <div class="bg-orb orb-b"></div>
 
     <div class="container">
-      <h2>Ajustes de Gastos Gmail</h2>
+      <h2>Ajustes de ExpensIA</h2>
       <p class="sub">Configura etiquetas, destino de hoja y categorías de gasto.</p>
 
       <div class="card glass">
@@ -48,6 +48,17 @@
         <h3>Categorías (una por línea)</h3>
         <textarea id="categories" rows="10" placeholder="supermarket&#10;restaurants&#10;subscriptions"></textarea>
         <p class="hint">Estas categorías se envían al modelo para clasificar cada gasto.</p>
+      </div>
+
+      <div class="card glass">
+        <div class="row-header">
+          <h3>Lista de exclusión</h3>
+          <button id="addExclusionRule" type="button" class="circle-btn" aria-label="Agregar regla">+</button>
+        </div>
+        <p class="hint">
+          Si el correo contiene la palabra indicada, se fuerza la categoría seleccionada.
+        </p>
+        <div id="exclusionRulesList" class="rules-list"></div>
       </div>
 
       <div class="actions">

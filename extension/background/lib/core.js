@@ -220,7 +220,7 @@ const BackgroundCore = {
     return text ? JSON.parse(text) : {};
   },
 
-  async pushEmailsToBackend(token, emails, categories = []) {
+  async pushEmailsToBackend(token, emails, categories = [], exclusionRules = []) {
     const res = await fetch(ON_EMAIL_PUSH_URL, {
       method: "POST",
       headers: {
@@ -231,6 +231,7 @@ const BackgroundCore = {
       body: JSON.stringify({
         emails,
         categories,
+        exclusionRules,
       }),
     });
 

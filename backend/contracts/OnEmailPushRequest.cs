@@ -8,4 +8,7 @@ public sealed class OnEmailPushRequest
 
     [JsonPropertyName("categories")]
     public List<string> Categories { get; set; } = [];
+
+    [JsonPropertyName("exclusionRules")]
+    public List<CategoryExclusionRule> ExclusionRules { get; set; } = [];
 }

@@ -55,7 +55,11 @@ public class OnEmailPush
 
         await _tokenValidator.ValidateTokenAsync(token, ct);
 
-        var parsedEntries = await ParseEmailsAsync(payload.Emails, payload.Categories, ct);
+        var parsedEntries = await ParseEmailsAsync(
+            payload.Emails,
+            payload.Categories,
+            payload.ExclusionRules,
+            ct);
         _logger.LogInformation(
             "OnEmailPush completed. InvocationId={InvocationId} ParsedEntries={ParsedCount}",
             context.InvocationId,
@@ -75,10 +79,11 @@ public class OnEmailPush
     private async Task<List<ExpenseParseResult>> ParseEmailsAsync(
         IReadOnlyCollection<EmailEntry> emails,
         IReadOnlyCollection<string> categories,
+        IReadOnlyCollection<CategoryExclusionRule> exclusionRules,
         CancellationToken ct)
     {
         var emailList = emails as IReadOnlyList<EmailEntry> ?? emails.ToList();
-        return await _expenseParser.ParseBatchAsync(emailList, categories, ct);
+        return await _expenseParser.ParseBatchAsync(emailList, categories, exclusionRules, ct);
     }
 
     private static IActionResult BuildBadRequest(string message) =>
