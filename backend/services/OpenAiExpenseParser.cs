@@ -5,6 +5,7 @@ using Azure.Identity;
 using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Text.Json.Serialization;
 
 public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
 {
@@ -13,13 +14,22 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private const string JsonMediaType = "application/json";
     private const string OpenAiSecretName = "openai-api-key";
     private const string DefaultModel = "gpt-5-nano";
-    private const double DefaultTemperature = 1;
     private const string ConfigOpenAiApiKey = "OPENAI_API_KEY";
     private const string ConfigOpenAiApiKeyFromVault = "openai-api-key";
     private const string ConfigKeyVaultUri = "KEY_VAULT_URI";
     private const string ConfigOpenAiModel = "OPENAI_MODEL";
     private const string ConfigSystemPrompt = "OPENAI_SYSTEM_PROMPT";
     private const string ConfigUserPromptTemplate = "OPENAI_USER_PROMPT_TEMPLATE";
+    private const string ConfigBatchSize = "OPENAI_EMAIL_BATCH_SIZE";
+    private const string ConfigBatchConcurrency = "OPENAI_BATCH_CONCURRENCY";
+    private const string ConfigMaxEmailMessageChars = "OPENAI_MAX_EMAIL_MESSAGE_CHARS";
+    private const int DefaultBatchSize = 5;
+    private const int DefaultBatchConcurrency = 2;
+    private const int DefaultMaxEmailMessageChars = 4000;
+    private const string NonTransactionCategory = "N/A";
+    private const string NonTransactionAmount = "0";
+    private const string NonTransactionDescriptionFallback = "Email no transaccional";
+    private const int NonTransactionSummaryMaxChars = 80;
     private const string DefaultCategoriesText = "No categories provided.";
     private const string ExclusionRulesPlaceholder = "{{exclusion_rules_json}}";
     private const int LogPreviewLength = 1200;
@@ -58,25 +68,55 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         var apiKey = await GetApiKeyAsync(ct);
         var model = GetConfiguredModel();
         var systemPrompt = GetConfiguredSystemPrompt();
-        var userPrompt = BuildUserPrompt(emails, categories, exclusionRules);
+        var batchSize = GetConfiguredBatchSize();
+        var batchConcurrency = GetConfiguredBatchConcurrency();
+        var totalBatches = (emails.Count + batchSize - 1) / batchSize;
+
         _logger.LogInformation(
-            "OpenAI batch parse started. Emails={EmailCount} Categories={CategoryCount} Model={Model} PromptChars={PromptChars}",
+            "OpenAI parse started. Emails={EmailCount} Categories={CategoryCount} Model={Model} BatchSize={BatchSize} BatchConcurrency={BatchConcurrency} TotalBatches={TotalBatches}",
             emails.Count,
             categories.Count,
             model,
-            userPrompt.Length);
+            batchSize,
+            batchConcurrency,
+            totalBatches);
 
-        using var request = BuildChatCompletionsRequest(apiKey, model, systemPrompt, userPrompt);
-        var responseBody = await SendRequestAndReadBodyAsync(request, ct);
-        _logger.LogInformation("OpenAI raw response received. Chars={ResponseChars}", responseBody.Length);
+        var chunkTasks = new List<Task<ChunkResult>>(totalBatches);
+        using var gate = new SemaphoreSlim(batchConcurrency, batchConcurrency);
+        for (var batchIndex = 0; batchIndex < totalBatches; batchIndex++)
+        {
+            var start = batchIndex * batchSize;
+            var count = Math.Min(batchSize, emails.Count - start);
+            var chunk = new List<EmailEntry>(count);
+            for (var i = 0; i < count; i++)
+                chunk.Add(emails[start + i]);
 
-        var parsed = ParseModelResult(responseBody);
-        var normalized = NormalizeResults(parsed, emails);
+            var chunkNumber = batchIndex + 1;
+            chunkTasks.Add(ProcessChunkAsync(
+                gate,
+                apiKey,
+                model,
+                systemPrompt,
+                chunk,
+                categories,
+                exclusionRules,
+                chunkNumber,
+                totalBatches,
+                ct));
+        }
+
+        var chunkResults = await Task.WhenAll(chunkTasks);
+        Array.Sort(chunkResults, static (left, right) => left.ChunkNumber.CompareTo(right.ChunkNumber));
+
+        var allResults = new List<ExpenseParseResult>(emails.Count);
+        foreach (var chunkResult in chunkResults)
+            allResults.AddRange(chunkResult.Results);
+
         _logger.LogInformation(
-            "OpenAI batch parse completed. Parsed={ParsedCount} Normalized={NormalizedCount}",
-            parsed.Count,
-            normalized.Count);
-        return normalized;
+            "OpenAI parse completed. Emails={EmailCount} Aggregated={AggregatedCount}",
+            emails.Count,
+            allResults.Count);
+        return allResults;
     }
 
     private async Task<string> GetApiKeyAsync(CancellationToken ct)
@@ -119,6 +159,33 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
     private string GetConfiguredModel()
         => _configuration[ConfigOpenAiModel] ?? DefaultModel;
 
+    private int GetConfiguredBatchSize()
+    {
+        var configuredValue = _configuration[ConfigBatchSize];
+        if (!int.TryParse(configuredValue, out var batchSize) || batchSize <= 0)
+            return DefaultBatchSize;
+
+        return batchSize;
+    }
+
+    private int GetConfiguredBatchConcurrency()
+    {
+        var configuredValue = _configuration[ConfigBatchConcurrency];
+        if (!int.TryParse(configuredValue, out var concurrency) || concurrency <= 0)
+            return DefaultBatchConcurrency;
+
+        return concurrency;
+    }
+
+    private int GetConfiguredMaxEmailMessageChars()
+    {
+        var configuredValue = _configuration[ConfigMaxEmailMessageChars];
+        if (!int.TryParse(configuredValue, out var maxChars) || maxChars <= 0)
+            return DefaultMaxEmailMessageChars;
+
+        return maxChars;
+    }
+
     private string GetConfiguredSystemPrompt()
     {
         var prompt = _configuration[ConfigSystemPrompt];
@@ -143,7 +210,7 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         var categoryText = categories.Count > 0
             ? string.Join(", ", categories)
             : DefaultCategoriesText;
-        var emailsJson = JsonSerializer.Serialize(emails);
+        var emailsJson = JsonSerializer.Serialize(BuildPromptEmailPayload(emails));
         var exclusionRulesJson = JsonSerializer.Serialize(exclusionRules ?? []);
 
         return template
@@ -161,7 +228,6 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
         var requestBody = new
         {
             model,
-            temperature = DefaultTemperature,
             messages = new object[]
             {
                 new { role = "system", content = systemPrompt },
@@ -177,6 +243,72 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
             JsonMediaType);
 
         return request;
+    }
+
+    private async Task<ChunkResult> ProcessChunkAsync(
+        SemaphoreSlim gate,
+        string apiKey,
+        string model,
+        string systemPrompt,
+        IReadOnlyList<EmailEntry> chunk,
+        IReadOnlyCollection<string> categories,
+        IReadOnlyCollection<CategoryExclusionRule> exclusionRules,
+        int chunkNumber,
+        int totalBatches,
+        CancellationToken ct)
+    {
+        await gate.WaitAsync(ct);
+        try
+        {
+            var userPrompt = BuildUserPrompt(chunk, categories, exclusionRules);
+            _logger.LogInformation(
+                "OpenAI batch parse chunk started. Chunk={ChunkIndex}/{TotalBatches} Emails={ChunkEmailCount} PromptChars={PromptChars}",
+                chunkNumber,
+                totalBatches,
+                chunk.Count,
+                userPrompt.Length);
+
+            using var request = BuildChatCompletionsRequest(apiKey, model, systemPrompt, userPrompt);
+            var responseBody = await SendRequestAndReadBodyAsync(request, ct);
+            _logger.LogInformation(
+                "OpenAI batch parse chunk response received. Chunk={ChunkIndex}/{TotalBatches} ResponseChars={ResponseChars}",
+                chunkNumber,
+                totalBatches,
+                responseBody.Length);
+
+            var parsed = ParseModelResult(responseBody);
+            var normalized = NormalizeResults(parsed, chunk);
+            _logger.LogInformation(
+                "OpenAI batch parse chunk completed. Chunk={ChunkIndex}/{TotalBatches} Parsed={ParsedCount} Normalized={NormalizedCount}",
+                chunkNumber,
+                totalBatches,
+                parsed.Count,
+                normalized.Count);
+
+            return new ChunkResult(chunkNumber, normalized);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private List<PromptEmailEntry> BuildPromptEmailPayload(IReadOnlyList<EmailEntry> emails)
+    {
+        var maxMessageChars = GetConfiguredMaxEmailMessageChars();
+        var output = new List<PromptEmailEntry>(emails.Count);
+        for (var i = 0; i < emails.Count; i++)
+        {
+            var email = emails[i];
+            output.Add(new PromptEmailEntry
+            {
+                Date = email.Date?.Trim() ?? string.Empty,
+                Sender = email.Sender?.Trim() ?? string.Empty,
+                Message = Truncate(email.Message?.Trim() ?? string.Empty, maxMessageChars),
+            });
+        }
+
+        return output;
     }
 
     private async Task<string> SendRequestAndReadBodyAsync(HttpRequestMessage request, CancellationToken ct)
@@ -269,6 +401,16 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
             result.Amount ??= string.Empty;
             result.Category ??= string.Empty;
             result.Description ??= string.Empty;
+            result.Amount = result.Amount.Trim();
+            result.Category = result.Category.Trim();
+            result.Description = result.Description.Trim();
+
+            if (IsNonTransactionalResult(result))
+            {
+                result.Amount = NonTransactionAmount;
+                result.Category = NonTransactionCategory;
+                result.Description = BuildNonTransactionSummary(source.Message);
+            }
 
             normalized.Add(result);
         }
@@ -348,5 +490,49 @@ public sealed class OpenAiExpenseParser : IOpenAiExpenseParser
             return value;
 
         return value[..maxChars];
+    }
+
+    private static bool IsNonTransactionalResult(ExpenseParseResult result)
+    {
+        return string.IsNullOrWhiteSpace(result.Amount) &&
+               string.IsNullOrWhiteSpace(result.Category) &&
+               string.IsNullOrWhiteSpace(result.Description);
+    }
+
+    private static string BuildNonTransactionSummary(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return NonTransactionDescriptionFallback;
+
+        var collapsed = string.Join(
+            " ",
+            message
+                .Split(new[] { '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        if (string.IsNullOrWhiteSpace(collapsed))
+            return NonTransactionDescriptionFallback;
+
+        var firstSentenceEnd = collapsed.IndexOfAny(new[] { '.', ';', ':' });
+        var summary = firstSentenceEnd > 0
+            ? collapsed[..firstSentenceEnd]
+            : collapsed;
+        summary = summary.Trim(' ', '-', '_', ',', '.');
+        if (string.IsNullOrWhiteSpace(summary))
+            return NonTransactionDescriptionFallback;
+
+        return Truncate(summary, NonTransactionSummaryMaxChars);
+    }
+
+    private sealed record ChunkResult(int ChunkNumber, List<ExpenseParseResult> Results);
+
+    private sealed class PromptEmailEntry
+    {
+        [JsonPropertyName("date")]
+        public string Date { get; init; } = string.Empty;
+
+        [JsonPropertyName("sender")]
+        public string Sender { get; init; } = string.Empty;
+
+        [JsonPropertyName("message")]
+        public string Message { get; init; } = string.Empty;
     }
 }
