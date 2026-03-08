@@ -327,14 +327,21 @@ const BackgroundCore = {
       throw new Error("Invalid sheetUrl. Could not extract spreadsheet id.");
     }
 
-    const range = encodeURIComponent(`${sheetTab}!A:D`);
-    const url =
-      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append` +
-      `?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-
     const rows = BackgroundCore.toSheetRows(parsedEntries);
-    const res = await fetch(url, {
-      method: "POST",
+    if (rows.length === 0) return null;
+
+    const startRow = await BackgroundCore.findFirstEmptyRowInColumnA(
+      token,
+      spreadsheetId,
+      sheetTab,
+    );
+    const writeRange = encodeURIComponent(`${sheetTab}!A${startRow}:D`);
+    const writeUrl =
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${writeRange}` +
+      `?valueInputOption=USER_ENTERED`;
+
+    const res = await fetch(writeUrl, {
+      method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
@@ -361,6 +368,41 @@ const BackgroundCore = {
     }
 
     return body;
+  },
+
+  async findFirstEmptyRowInColumnA(token, spreadsheetId, sheetTab) {
+    const firstDataRow = 2;
+    const readRange = encodeURIComponent(`${sheetTab}!A${firstDataRow}:A`);
+    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${readRange}`;
+
+    const res = await fetch(readUrl, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+
+    const text = await res.text();
+    let body = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = text;
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        `Sheet read failed: ${res.status} ${typeof body === "string" ? body : JSON.stringify(body)}`,
+      );
+    }
+
+    const values = Array.isArray(body?.values) ? body.values : [];
+    for (let i = 0; i < values.length; i += 1) {
+      const cell = Array.isArray(values[i]) ? String(values[i][0] || "").trim() : "";
+      if (!cell) return firstDataRow + i;
+    }
+
+    return firstDataRow + values.length;
   },
 
   async fetchUserInfo(token) {
