@@ -2,6 +2,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 
 namespace functions;
 
@@ -60,12 +61,13 @@ public class OnEmailPush
             payload.Categories,
             payload.ExclusionRules,
             ct);
+        var orderedEntries = OrderEntriesByDateOldestFirst(parsedEntries);
         _logger.LogInformation(
             "OnEmailPush completed. InvocationId={InvocationId} ParsedEntries={ParsedCount}",
             context.InvocationId,
-            parsedEntries.Count);
+            orderedEntries.Count);
 
-        return BuildSuccessResponse(parsedEntries);
+        return BuildSuccessResponse(orderedEntries);
     }
 
     private IActionResult? ValidateRequest(OnEmailPushRequest payload)
@@ -107,4 +109,67 @@ public class OnEmailPush
             total = parsedEntries.Count,
             entries = parsedEntries,
         });
+
+    private static List<ExpenseParseResult> OrderEntriesByDateOldestFirst(
+        IReadOnlyList<ExpenseParseResult> entries)
+    {
+        var indexed = entries
+            .Select((entry, index) => new
+            {
+                Entry = entry,
+                Index = index,
+                SortDate = TryParseEntryDate(entry.Date),
+            })
+            .ToList();
+
+        indexed.Sort((left, right) =>
+        {
+            var leftHasDate = left.SortDate.HasValue;
+            var rightHasDate = right.SortDate.HasValue;
+
+            if (leftHasDate && rightHasDate)
+            {
+                var dateCompare = DateTimeOffset.Compare(left.SortDate!.Value, right.SortDate!.Value);
+                if (dateCompare != 0)
+                    return dateCompare;
+            }
+            else if (leftHasDate != rightHasDate)
+            {
+                return leftHasDate ? -1 : 1;
+            }
+
+            return left.Index.CompareTo(right.Index);
+        });
+
+        return indexed.Select(item => item.Entry).ToList();
+    }
+
+    private static DateTimeOffset? TryParseEntryDate(string? rawDate)
+    {
+        if (string.IsNullOrWhiteSpace(rawDate))
+            return null;
+
+        if (DateTimeOffset.TryParse(rawDate, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsed))
+            return parsed;
+
+        var supportedFormats = new[]
+        {
+            "dd/MM/yyyy",
+            "d/M/yyyy",
+            "yyyy-MM-dd",
+            "yyyy-MM-ddTHH:mm:ss",
+            "yyyy-MM-ddTHH:mm:ssZ",
+        };
+        if (DateTimeOffset.TryParseExact(
+                rawDate,
+                supportedFormats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
 }
