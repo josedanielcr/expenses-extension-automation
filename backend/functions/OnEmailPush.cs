@@ -149,9 +149,6 @@ public class OnEmailPush
         if (string.IsNullOrWhiteSpace(rawDate))
             return null;
 
-        if (DateTimeOffset.TryParse(rawDate, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsed))
-            return parsed;
-
         var supportedFormats = new[]
         {
             "dd/MM/yyyy",
@@ -160,14 +157,36 @@ public class OnEmailPush
             "yyyy-MM-ddTHH:mm:ss",
             "yyyy-MM-ddTHH:mm:ssZ",
         };
+
+        var value = rawDate.Trim();
+
+        // Slash-based dates are expected in local day-first format.
+        if (value.Contains('/'))
+        {
+            if (DateTimeOffset.TryParseExact(
+                    value,
+                    new[] { "dd/MM/yyyy", "d/M/yyyy" },
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                    out var dayFirstParsed))
+            {
+                return dayFirstParsed;
+            }
+        }
+
         if (DateTimeOffset.TryParseExact(
-                rawDate,
+                value,
                 supportedFormats,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
-                out parsed))
+                out var parsedExact))
         {
-            return parsed;
+            return parsedExact;
+        }
+
+        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsedGeneric))
+        {
+            return parsedGeneric;
         }
 
         return null;
