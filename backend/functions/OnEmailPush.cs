@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace functions;
 
@@ -158,7 +159,7 @@ public class OnEmailPush
             "yyyy-MM-ddTHH:mm:ssZ",
         };
 
-        var value = rawDate.Trim();
+        var value = NormalizeDateForSorting(rawDate);
 
         // Slash-based dates are expected in local day-first format.
         if (value.Contains('/'))
@@ -189,6 +190,27 @@ public class OnEmailPush
             return parsedGeneric;
         }
 
+        if (DateTimeOffset.TryParse(value, CultureInfo.GetCultureInfo("en-US"), DateTimeStyles.AllowWhiteSpaces, out parsedGeneric))
+        {
+            return parsedGeneric;
+        }
+
         return null;
+    }
+
+    private static string NormalizeDateForSorting(string rawDate)
+    {
+        var value = rawDate.Trim();
+        if (value.Length == 0)
+            return string.Empty;
+
+        // Drop trailing timezone labels like "(UTC)" while keeping numeric offset.
+        value = Regex.Replace(value, @"\s*\([A-Za-z]{2,8}\)\s*$", string.Empty);
+        // Convert RFC 2822 offset style (+0000) to ISO style (+00:00) for stable parsing.
+        value = Regex.Replace(value, @"([+-]\d{2})(\d{2})\b", "$1:$2");
+        // Keep tokenization predictable.
+        value = Regex.Replace(value, @"\s+", " ").Trim();
+
+        return value;
     }
 }
