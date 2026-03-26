@@ -236,3 +236,4 @@ FakesAssemblies/
 # JetBrains Rider
 *.sln.iml
 extension.zip
+extension-staging.zip
