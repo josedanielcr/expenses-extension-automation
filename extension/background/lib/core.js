@@ -1,5 +1,27 @@
-const ON_EMAIL_PUSH_URL =
-  "https://email-processor-ai-angubybzh5feb8ce.canadacentral-01.azurewebsites.net/api/OnEmailPush";
+const DEFAULT_FUNCTION_HOST =
+  "https://email-processor-ai-angubybzh5feb8ce.canadacentral-01.azurewebsites.net";
+const ON_EMAIL_PUSH_PATH = "/api/OnEmailPush";
+
+function resolveOnEmailPushUrl() {
+  const manifest = chrome.runtime?.getManifest?.();
+  const hostPermissions = manifest?.host_permissions || [];
+  const azureHostPermission = hostPermissions.find((permission) =>
+    permission.includes(".azurewebsites.net"),
+  );
+
+  if (!azureHostPermission) {
+    return `${DEFAULT_FUNCTION_HOST}${ON_EMAIL_PUSH_PATH}`;
+  }
+
+  try {
+    const origin = new URL(azureHostPermission.replace("*", "")).origin;
+    return `${origin}${ON_EMAIL_PUSH_PATH}`;
+  } catch {
+    return `${DEFAULT_FUNCTION_HOST}${ON_EMAIL_PUSH_PATH}`;
+  }
+}
+
+const ON_EMAIL_PUSH_URL = resolveOnEmailPushUrl();
 
 const BackgroundCore = {
   async getAuthToken(interactive) {
