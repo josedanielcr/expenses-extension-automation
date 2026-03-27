@@ -237,3 +237,4 @@ FakesAssemblies/
 *.sln.iml
 extension.zip
 extension-staging.zip
+/backend/output
