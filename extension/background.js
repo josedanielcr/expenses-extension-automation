@@ -31,9 +31,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         return;
       }
 
-      sendResponse({ ok: false, error: "Unknown message type" });
+      sendResponse({ ok: false, error: "Solicitud no reconocida por la extensión." });
     } catch (err) {
-      sendResponse({ ok: false, error: String(err?.message || err) });
+      console.error("Background error:", err);
+      sendResponse({ ok: false, error: BackgroundCore.toUserErrorMessage(err) });
     }
   })();
 

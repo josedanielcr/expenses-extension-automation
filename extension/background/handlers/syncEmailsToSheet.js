@@ -1,6 +1,6 @@
 async function syncParsedEntriesToSheet(extraction, parsedResult, sheetUrl, sheetTab) {
   if (!sheetUrl) return null;
-  const parsedEntries = parsedResult?.entries || [];
+  const parsedEntries = Array.isArray(parsedResult?.entries) ? parsedResult.entries : [];
   if (parsedEntries.length === 0) return null;
 
   return await BackgroundCore.appendParsedEntriesToSheet(

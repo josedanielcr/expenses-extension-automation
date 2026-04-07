@@ -34,6 +34,129 @@ const BackgroundCore = {
     return authResult.token || "";
   },
 
+  parsePossibleJson(value) {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    const looksLikeJson =
+      (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+      (trimmed.startsWith("[") && trimmed.endsWith("]")) ||
+      (trimmed.startsWith("\"") && trimmed.endsWith("\""));
+    if (!looksLikeJson) return value;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return value;
+    }
+  },
+
+  parseResponseBody(text) {
+    const firstPass = BackgroundCore.parsePossibleJson(text || "");
+    if (typeof firstPass === "string") {
+      return BackgroundCore.parsePossibleJson(firstPass);
+    }
+    return firstPass;
+  },
+
+  extractApiErrorMessage(body) {
+    if (!body) return "";
+    if (typeof body === "string") return body.trim();
+
+    const direct =
+      body.message ||
+      body.error_description ||
+      body.errorMessage ||
+      body.title ||
+      body.detail ||
+      "";
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+
+    if (typeof body.error === "string" && body.error.trim()) {
+      return body.error.trim();
+    }
+
+    if (body.error && typeof body.error === "object") {
+      const nested =
+        body.error.message ||
+        body.error.error_description ||
+        body.error.detail ||
+        body.error.title ||
+        "";
+      if (typeof nested === "string" && nested.trim()) return nested.trim();
+    }
+
+    if (Array.isArray(body.errors) && body.errors.length > 0) {
+      const first = body.errors[0];
+      if (typeof first === "string") return first.trim();
+      if (typeof first?.message === "string" && first.message.trim()) return first.message.trim();
+    }
+
+    return "";
+  },
+
+  translateKnownErrorDetail(message) {
+    const raw = String(message || "").trim();
+    if (!raw) return "";
+    if (/[áéíóúñ¿¡]/i.test(raw)) return raw;
+
+    if (/Failed to fetch/i.test(raw) || /NetworkError/i.test(raw)) {
+      return "No se pudo establecer conexión. Revisa tu conexión a internet e inténtalo de nuevo.";
+    }
+    if (/token/i.test(raw) && /auth|acquire|session|signin|sign in/i.test(raw)) {
+      return "No hay sesión activa. Inicia sesión nuevamente.";
+    }
+    if (/Invalid date range format/i.test(raw)) {
+      return "Formato de fechas inválido. Usa el formato YYYY-MM-DD.";
+    }
+    if (/Start date must be before end date/i.test(raw)) {
+      return "La fecha inicial debe ser anterior o igual a la fecha final.";
+    }
+    if (/Label "(.+)" was not found in Gmail\./i.test(raw)) {
+      return raw.replace(
+        /Label "(.+)" was not found in Gmail\./i,
+        'No se encontró la etiqueta "$1" en Gmail.',
+      );
+    }
+    if (/Could not resolve processed label id/i.test(raw)) {
+      return "No se pudo resolver la etiqueta de destino para correos procesados.";
+    }
+    if (/Invalid sheetUrl/i.test(raw)) {
+      return "La URL de Google Sheets no es válida.";
+    }
+    if (/Unknown message type/i.test(raw)) {
+      return "Solicitud no reconocida por la extensión.";
+    }
+
+    return "";
+  },
+
+  buildHttpError(userMessage, status, body) {
+    const apiMessage = BackgroundCore.extractApiErrorMessage(body);
+    const translatedDetail = BackgroundCore.translateKnownErrorDetail(apiMessage);
+    const isServerError = Number(status) >= 500;
+    const finalMessage = translatedDetail
+      ? `${userMessage} ${translatedDetail}`
+      : isServerError
+        ? "Ocurrió un error inesperado al procesar tu solicitud. Inténtalo de nuevo más tarde."
+        : `${userMessage} Inténtalo de nuevo.`;
+    const err = new Error(finalMessage);
+    err.userMessage = finalMessage;
+    err.httpStatus = status;
+    err.rawApiMessage = apiMessage;
+    return err;
+  },
+
+  toUserErrorMessage(error, fallback = "Ocurrió un error inesperado.") {
+    if (error && typeof error === "object" && typeof error.userMessage === "string") {
+      return error.userMessage;
+    }
+
+    const raw = String(error?.message || error || "").trim();
+    const translated = BackgroundCore.translateKnownErrorDetail(raw);
+    if (translated) return translated;
+    return fallback;
+  },
+
   async gmailRequest(token, path, params = {}) {
     const url = new URL(`https://gmail.googleapis.com/gmail/v1/${path}`);
     Object.entries(params).forEach(([key, value]) => {
@@ -51,7 +174,8 @@ const BackgroundCore = {
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`gmail request failed: ${res.status} ${text}`);
+      const body = BackgroundCore.parseResponseBody(text);
+      throw BackgroundCore.buildHttpError("No fue posible consultar Gmail.", res.status, body);
     }
 
     return await res.json();
@@ -136,10 +260,10 @@ const BackgroundCore = {
     const endDate = String(dateRange.endDate || "").trim();
     const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
     if (!isDate(startDate) || !isDate(endDate)) {
-      throw new Error("Invalid date range format. Use YYYY-MM-DD.");
+      throw new Error("Formato de fechas inválido. Usa el formato YYYY-MM-DD.");
     }
     if (startDate > endDate) {
-      throw new Error("Invalid date range. Start date must be before end date.");
+      throw new Error("La fecha inicial debe ser anterior o igual a la fecha final.");
     }
 
     const startLocal = new Date(`${startDate}T00:00:00`);
@@ -194,12 +318,12 @@ const BackgroundCore = {
       BackgroundCore.tokenFromAuthResult(cachedTokenObject) ||
       BackgroundCore.tokenFromAuthResult(interactiveTokenObject);
     if (!token) {
-      throw new Error("No auth token available. Please sign in again.");
+      throw new Error("No hay sesión activa. Inicia sesión nuevamente.");
     }
 
     const labelId = await BackgroundCore.findLabelIdByName(token, labelName);
     if (!labelId) {
-      throw new Error(`Label "${labelName}" was not found in Gmail.`);
+      throw new Error(`No se encontró la etiqueta "${labelName}" en Gmail.`);
     }
 
     const messageRefs = await BackgroundCore.listAllMessagesByLabel(token, labelId, dateRange);
@@ -229,10 +353,16 @@ const BackgroundCore = {
 
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`create label failed: ${res.status} ${text}`);
+      const body = BackgroundCore.parseResponseBody(text);
+      throw BackgroundCore.buildHttpError(
+        "No fue posible crear la etiqueta en Gmail.",
+        res.status,
+        body,
+      );
     }
 
-    return text ? JSON.parse(text) : null;
+    const body = BackgroundCore.parseResponseBody(text);
+    return body && typeof body === "object" ? body : null;
   },
 
   async getOrCreateLabelId(token, labelName) {
@@ -262,10 +392,16 @@ const BackgroundCore = {
 
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`batchModify failed: ${res.status} ${text}`);
+      const body = BackgroundCore.parseResponseBody(text);
+      throw BackgroundCore.buildHttpError(
+        "No fue posible mover etiquetas en Gmail.",
+        res.status,
+        body,
+      );
     }
 
-    return text ? JSON.parse(text) : {};
+    const body = BackgroundCore.parseResponseBody(text);
+    return body && typeof body === "object" ? body : {};
   },
 
   async pushEmailsToBackend(token, emails, categories = [], exclusionRules = []) {
@@ -284,20 +420,17 @@ const BackgroundCore = {
     });
 
     const text = await res.text();
-    let body = null;
-    try {
-      body = text ? JSON.parse(text) : null;
-    } catch {
-      body = text;
-    }
+    const body = BackgroundCore.parseResponseBody(text);
 
     if (!res.ok) {
-      throw new Error(
-        `OnEmailPush failed: ${res.status} ${typeof body === "string" ? body : JSON.stringify(body)}`,
+      throw BackgroundCore.buildHttpError(
+        "No se pudo procesar la información con el servidor.",
+        res.status,
+        body,
       );
     }
 
-    return body;
+    return body || {};
   },
 
   extractSpreadsheetId(sheetUrl) {
@@ -346,7 +479,7 @@ const BackgroundCore = {
   async appendParsedEntriesToSheet(token, sheetUrl, sheetTab, parsedEntries) {
     const spreadsheetId = BackgroundCore.extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) {
-      throw new Error("Invalid sheetUrl. Could not extract spreadsheet id.");
+      throw new Error("La URL de Google Sheets no es válida.");
     }
 
     const rows = BackgroundCore.toSheetRows(parsedEntries);
@@ -376,16 +509,13 @@ const BackgroundCore = {
     });
 
     const text = await res.text();
-    let body = null;
-    try {
-      body = text ? JSON.parse(text) : null;
-    } catch {
-      body = text;
-    }
+    const body = BackgroundCore.parseResponseBody(text);
 
     if (!res.ok) {
-      throw new Error(
-        `Sheet append failed: ${res.status} ${typeof body === "string" ? body : JSON.stringify(body)}`,
+      throw BackgroundCore.buildHttpError(
+        "No se pudo guardar la información en Google Sheets.",
+        res.status,
+        body,
       );
     }
 
@@ -405,16 +535,13 @@ const BackgroundCore = {
     });
 
     const text = await res.text();
-    let body = null;
-    try {
-      body = text ? JSON.parse(text) : null;
-    } catch {
-      body = text;
-    }
+    const body = BackgroundCore.parseResponseBody(text);
 
     if (!res.ok) {
-      throw new Error(
-        `Sheet read failed: ${res.status} ${typeof body === "string" ? body : JSON.stringify(body)}`,
+      throw BackgroundCore.buildHttpError(
+        "No se pudo leer Google Sheets.",
+        res.status,
+        body,
       );
     }
 
@@ -436,7 +563,12 @@ const BackgroundCore = {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`userinfo failed: ${res.status} ${text}`);
+      const body = BackgroundCore.parseResponseBody(text);
+      throw BackgroundCore.buildHttpError(
+        "No se pudo obtener la información de tu cuenta.",
+        res.status,
+        body,
+      );
     }
     return await res.json();
   },
