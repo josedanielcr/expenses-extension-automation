@@ -23,5 +23,6 @@ builder.Services
 
 builder.Services.AddHttpClient<GoogleTokenValidator>();
 builder.Services.AddHttpClient<IOpenAiExpenseParser, OpenAiExpenseParser>();
+builder.Services.AddHttpClient<ExchangeRateService>();
 
 builder.Build().Run();

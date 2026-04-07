@@ -238,3 +238,4 @@ FakesAssemblies/
 extension.zip
 extension-staging.zip
 /backend/output
+.azurite
