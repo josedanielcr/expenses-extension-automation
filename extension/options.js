@@ -90,10 +90,12 @@ function renderExclusionRules() {
 
     const wordInput = document.createElement("input");
     wordInput.type = "text";
-    wordInput.placeholder = "Palabra";
+    wordInput.placeholder = "Palabra o frase";
+    wordInput.setAttribute("aria-label", "Palabra o frase");
     wordInput.value = rule.word || "";
 
     const categorySelect = document.createElement("select");
+    categorySelect.setAttribute("aria-label", "Categoría");
     categories.forEach((category) => {
       const option = document.createElement("option");
       option.value = category;
@@ -105,8 +107,9 @@ function renderExclusionRules() {
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.className = "remove-rule";
-    removeBtn.textContent = "x";
+    removeBtn.textContent = "Quitar";
     removeBtn.title = "Eliminar regla";
+    removeBtn.setAttribute("aria-label", "Eliminar regla");
 
     row.appendChild(wordInput);
     row.appendChild(categorySelect);

@@ -6,65 +6,180 @@
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
-    <div class="bg-orb orb-a"></div>
-    <div class="bg-orb orb-b"></div>
-
     <div class="container">
-      <h2>Ajustes de ExpensIA</h2>
-      <p class="sub">Configura etiquetas, destino de hoja y categorías de gasto.</p>
-
-      <div class="card glass">
-        <h3>Etiquetas de Gmail</h3>
-        <label>
-          Etiqueta de origen
-          <input id="sourceLabel" placeholder="ToParse" />
-          <span class="hint">Etiqueta donde llegan los correos pendientes de procesar.</span>
-        </label>
-
-        <label>
-          Etiqueta de procesados
-          <input id="processedLabel" placeholder="AI Processed" />
-          <span class="hint">Etiqueta a la que se moverán los correos después de guardar en la hoja.</span>
-        </label>
-      </div>
-
-      <div class="card glass">
-        <h3>Google Sheets</h3>
-
-        <label>
-          URL del spreadsheet
-          <input id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." />
-          <span class="hint">Pega la URL completa del archivo de Google Sheets.</span>
-        </label>
-
-        <label>
-          Nombre de la pestaña
-          <input id="sheetTab" placeholder="draft" />
-          <span class="hint">Ejemplo: Gastos, Enero, Movimientos.</span>
-        </label>
-      </div>
-
-      <div class="card glass">
-        <h3>Categorías (una por línea)</h3>
-        <textarea id="categories" rows="10" placeholder="supermarket&#10;restaurants&#10;subscriptions"></textarea>
-        <p class="hint">Estas categorías se envían al modelo para clasificar cada gasto.</p>
-      </div>
-
-      <div class="card glass">
-        <div class="row-header">
-          <h3>Lista de exclusión</h3>
-          <button id="addExclusionRule" type="button" class="circle-btn" aria-label="Agregar regla">+</button>
+      <header class="page-head">
+        <div class="page-copy">
+          <h2>Configura ExpensIA</h2>
+          <p class="sub">
+            Define qué correos se leen, cómo se clasifican y en qué hoja se guardan.
+          </p>
         </div>
-        <p class="hint">
-          Si el correo contiene la palabra indicada, se fuerza la categoría seleccionada.
-        </p>
-        <div id="exclusionRulesList" class="rules-list"></div>
+      </header>
+
+      <div class="workspace">
+        <aside class="overview">
+          <section class="guide-card guide-card-primary">
+            <div class="guide-head">
+              <h3>Cómo funciona</h3>
+              <p class="guide-copy">
+                Estas son las decisiones que afectan todo el flujo.
+              </p>
+            </div>
+            <ol class="workflow-list">
+              <li class="workflow-item">
+                <span class="workflow-step">1</span>
+                <div>
+                  <strong>Entrada</strong>
+                  <p>ExpensIA solo revisa correos dentro de la etiqueta de origen.</p>
+                </div>
+              </li>
+              <li class="workflow-item">
+                <span class="workflow-step">2</span>
+                <div>
+                  <strong>Clasificación</strong>
+                  <p>La IA elige entre tus categorías y respeta las reglas de exclusión.</p>
+                </div>
+              </li>
+              <li class="workflow-item">
+                <span class="workflow-step">3</span>
+                <div>
+                  <strong>Salida</strong>
+                  <p>Cada gasto nuevo se guarda en la hoja y luego el correo pasa a procesados.</p>
+                </div>
+              </li>
+            </ol>
+          </section>
+
+          <section class="guide-card">
+            <h3>Buenas prácticas</h3>
+            <ul class="guide-list">
+              <li>Usa categorías cortas y fáciles de distinguir.</li>
+              <li>Confirma que la pestaña ya exista en tu spreadsheet.</li>
+              <li>Crea reglas solo para casos que se repiten.</li>
+            </ul>
+          </section>
+        </aside>
+
+        <main class="editor">
+          <section class="card">
+            <div class="section-head">
+              <div>
+                <h3>Etiquetas de Gmail</h3>
+                <p class="section-copy">
+                  Define qué correos entran al flujo y a qué etiqueta pasan después.
+                </p>
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <label class="field-block">
+                <span class="field-label">Etiqueta de origen</span>
+                <input id="sourceLabel" placeholder="ToParse" />
+                <span class="hint">Correos pendientes por procesar.</span>
+              </label>
+
+              <label class="field-block">
+                <span class="field-label">Etiqueta de procesados</span>
+                <input id="processedLabel" placeholder="AI Processed" />
+                <span class="hint">Destino después de guardarlos.</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="section-head">
+              <div>
+                <h3>Destino en Google Sheets</h3>
+                <p class="section-copy">
+                  Cada gasto nuevo se agrega en este archivo y en esta pestaña.
+                </p>
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <label class="field-block">
+                <span class="field-label">URL del spreadsheet</span>
+                <input id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." />
+                <span class="hint">URL completa del archivo.</span>
+              </label>
+
+              <label class="field-block">
+                <span class="field-label">Nombre de la pestaña</span>
+                <input id="sheetTab" placeholder="draft" />
+                <span class="hint">Lugar donde se escriben los gastos.</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="section-head">
+              <div>
+                <h3>Categorías</h3>
+                <p class="section-copy">
+                  La IA solo podrá elegir entre estas opciones.
+                </p>
+              </div>
+              <div class="section-side-note">Una por línea</div>
+            </div>
+
+            <div class="info-strip">
+              <strong>Para clasificar mejor</strong>
+              <ul class="guide-list compact inline-guide-list">
+                <li>Usa nombres simples como Casa, Gasolina o Suscripciones.</li>
+                <li>Evita tener dos categorías para el mismo tipo de gasto.</li>
+                <li>Si algo se confunde seguido, resuélvelo con una regla.</li>
+              </ul>
+            </div>
+
+            <label class="field-block field-block-full">
+              <span class="field-label">Lista de categorías</span>
+              <textarea
+                id="categories"
+                rows="10"
+                placeholder="supermarket&#10;restaurants&#10;subscriptions"
+              ></textarea>
+              <span class="hint">La IA usará esta lista al clasificar.</span>
+            </label>
+          </section>
+
+          <section class="card">
+            <div class="section-head">
+              <div>
+                <h3>Lista de exclusión</h3>
+                <p class="section-copy">
+                  Fuerza una categoría cuando aparezca una palabra o frase concreta.
+                </p>
+              </div>
+              <button id="addExclusionRule" type="button" class="circle-btn" aria-label="Agregar regla">
+                Agregar regla
+              </button>
+            </div>
+
+            <div class="rule-explainer">
+              <span>Si el correo contiene</span>
+              <strong>palabra o frase</strong>
+              <span>se guarda como</span>
+              <strong>categoría elegida</strong>
+            </div>
+
+            <div id="exclusionRulesList" class="rules-list"></div>
+          </section>
+        </main>
       </div>
 
       <div class="actions">
-        <button id="save" class="primary">Guardar</button>
-        <button id="reset" class="secondary">Restablecer</button>
-        <span id="status"></span>
+        <div class="action-copy">
+          <strong>Guarda cuando termines</strong>
+          <p class="action-note">
+            Restablecer vuelve a la configuración inicial.
+          </p>
+        </div>
+
+        <div class="action-buttons">
+          <span id="status" aria-live="polite"></span>
+          <button id="save" class="primary">Guardar</button>
+          <button id="reset" class="secondary">Restablecer</button>
+        </div>
       </div>
     </div>
 
