@@ -1,10 +1,24 @@
 {
   "manifest_version": 3,
   "name": "ExpensIA - testing",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "ExpensIA: lee correos etiquetados, extrae gastos con IA y los guarda en Google Sheets.",
-  "action": { "default_popup": "popup.html" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "assets/Logo (icon) 16.png",
+      "32": "assets/Logo (icon) 32.png",
+      "48": "assets/Logo (icon) 48.png",
+      "128": "assets/Logo (icon) 128.png"
+    }
+  },
   "options_page": "options.html",
+  "icons": {
+    "16": "assets/Logo (icon) 16.png",
+    "32": "assets/Logo (icon) 32.png",
+    "48": "assets/Logo (icon) 48.png",
+    "128": "assets/Logo (icon) 128.png"
+  },
 
   "background": {
     "service_worker": "background.js"
