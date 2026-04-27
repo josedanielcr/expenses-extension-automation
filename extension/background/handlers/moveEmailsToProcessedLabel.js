@@ -10,7 +10,7 @@ async function moveEmailsToProcessedLabel(extraction, sourceLabelName, processed
   const processedLabelId = await BackgroundCore.getOrCreateLabelId(token, processedLabelName);
 
   if (!processedLabelId) {
-    throw new Error(`Could not resolve processed label id for "${processedLabelName}".`);
+    throw new Error(`No se pudo resolver la etiqueta de destino "${processedLabelName}".`);
   }
 
   await BackgroundCore.batchModifyMessageLabels(

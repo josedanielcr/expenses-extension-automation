@@ -7,16 +7,13 @@
   </head>
 
   <body>
-    <div class="bg-orb orb-a"></div>
-    <div class="bg-orb orb-b"></div>
-
     <main class="shell">
       <header class="top">
         <div class="brand">ExpensIA</div>
         <button id="openSettings" class="icon-btn" aria-label="Abrir configuración">Ajustes</button>
       </header>
 
-      <section class="glass card">
+      <section class="card">
         <div class="label">Cuenta</div>
         <div class="status user-line" id="userLine"></div>
         <div class="row">
@@ -25,28 +22,34 @@
         </div>
       </section>
 
-      <section class="glass card">
+      <section class="card sync-card">
         <div class="label">Sincronización</div>
         <button id="syncBtn" class="primary" disabled>Sincronizar gastos</button>
-        <label class="range-toggle">
-          <input id="useDateRange" type="checkbox" />
-          <span>Filtrar por rango de fechas</span>
-        </label>
-        <div id="dateRangeFields" class="date-range-fields hidden">
-          <label class="date-field">
-            <span>Desde</span>
-            <input id="startDate" type="date" />
+
+        <div class="sync-filter">
+          <label class="range-toggle" for="useDateRange">
+            <input id="useDateRange" type="checkbox" />
+            <span class="range-title">Filtrar por rango de fechas</span>
           </label>
-          <label class="date-field">
-            <span>Hasta</span>
-            <input id="endDate" type="date" />
-          </label>
+          <div id="dateRangeFields" class="date-range-fields hidden">
+            <label class="date-field">
+              <span>Desde</span>
+              <input id="startDate" type="date" />
+            </label>
+            <label class="date-field">
+              <span>Hasta</span>
+              <input id="endDate" type="date" />
+            </label>
+          </div>
         </div>
-        <div class="sync-feedback">
-          <span id="syncIndicator" class="sync-indicator" aria-hidden="true"></span>
+
+        <div class="sync-state">
+          <div class="sync-feedback">
+            <span id="syncIndicator" class="sync-indicator" aria-hidden="true"></span>
+            <div class="status" id="status"></div>
+          </div>
+          <div id="processLog" class="process-log"></div>
         </div>
-        <div id="processLog" class="process-log"></div>
-        <div class="status" id="status"></div>
       </section>
     </main>
 

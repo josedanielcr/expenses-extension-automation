@@ -38,6 +38,21 @@ async function handleExtractEmailsFromLabel(msg) {
   const extraction = await BackgroundCore.extractEmailsFromLabel(labelName, dateRange);
   await emitSyncProgress("extract", "done", `${extraction.total} correos encontrados`);
 
+  if (extraction.total === 0) {
+    await emitSyncProgress("ai", "done", "Sin correos para analizar");
+    await emitSyncProgress("sheet", "done", "Sin filas para guardar");
+    await emitSyncProgress("labels", "done", "Movimiento omitido");
+
+    return {
+      ok: true,
+      labelName: extraction.labelName,
+      total: extraction.total,
+      parsed: { entries: [] },
+      rowsAppended: 0,
+      noEmails: true,
+    };
+  }
+
   await emitSyncProgress("ai", "running", "Analizando gastos con IA");
   const parsedResult = await BackgroundCore.pushEmailsToBackend(
     extraction.token,
@@ -73,7 +88,7 @@ async function handleExtractEmailsFromLabel(msg) {
     await emitSyncProgress("labels", "done", "Movimiento omitido");
   }
 
-  const rowsAppended = (parsedResult?.entries || []).length;
+  const rowsAppended = Array.isArray(parsedResult?.entries) ? parsedResult.entries.length : 0;
 
   return {
     ok: true,

@@ -17,18 +17,25 @@ public class OnEmailPush
     private const string ErrorRequestRequired = "Request body is required.";
     private const string ErrorTokenRequired = "Authorization header with Bearer token is required.";
     private const string ErrorEmailsRequired = "emails must contain at least one entry.";
+    private const string CurrencyUsd = "USD";
+    private const string CurrencyCrc = "CRC";
+    private const string CurrencyCodePattern = @"\(([A-Za-z]{3})\)";
+    private static readonly Regex CurrencyCodeRegex = new(CurrencyCodePattern, RegexOptions.Compiled);
     private readonly ILogger<OnEmailPush> _logger;
     private readonly GoogleTokenValidator _tokenValidator;
     private readonly IOpenAiExpenseParser _expenseParser;
+    private readonly ExchangeRateService _exchangeRateService;
 
     public OnEmailPush(
         ILogger<OnEmailPush> logger,
         GoogleTokenValidator tokenValidator,
-        IOpenAiExpenseParser expenseParser)
+        IOpenAiExpenseParser expenseParser,
+        ExchangeRateService exchangeRateService)
     {
         _logger = logger;
         _tokenValidator = tokenValidator;
         _expenseParser = expenseParser;
+        _exchangeRateService = exchangeRateService;
     }
 
     [Function(FunctionName)]
@@ -62,6 +69,7 @@ public class OnEmailPush
             payload.Categories,
             payload.ExclusionRules,
             ct);
+        await ConvertUsdEntriesToCrcAsync(parsedEntries, ct);
         var orderedEntries = OrderEntriesByDateOldestFirst(parsedEntries);
         _logger.LogInformation(
             "OnEmailPush completed. InvocationId={InvocationId} ParsedEntries={ParsedCount}",
@@ -212,5 +220,84 @@ public class OnEmailPush
         value = Regex.Replace(value, @"\s+", " ").Trim();
 
         return value;
+    }
+
+    private async Task ConvertUsdEntriesToCrcAsync(
+        IReadOnlyCollection<ExpenseParseResult> entries,
+        CancellationToken ct)
+    {
+        var usdEntries = entries
+            .Where(IsUsdCurrencyEntry)
+            .ToList();
+        if (usdEntries.Count == 0)
+            return;
+
+        var conversionRate = await _exchangeRateService.GetUsdToCrcRateAsync(ct);
+        var convertedCount = 0;
+        foreach (var entry in usdEntries)
+        {
+            if (!decimal.TryParse(entry.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out var originalAmount))
+                continue;
+
+            var originalUsdAmount = FormatAmount(originalAmount);
+            var convertedAmount = decimal.Round(originalAmount * conversionRate, 0, MidpointRounding.AwayFromZero);
+            entry.Amount = FormatAmount(convertedAmount);
+            entry.Description = ReplaceCurrencyCode(entry.Description, CurrencyUsd, CurrencyCrc);
+            entry.Description = AppendOriginalUsdAmount(entry.Description, originalUsdAmount);
+            convertedCount++;
+        }
+
+        _logger.LogInformation(
+            "USD entries converted to CRC. ConvertedEntries={ConvertedEntries} Rate={Rate}",
+            convertedCount,
+            conversionRate);
+    }
+
+    private static bool IsUsdCurrencyEntry(ExpenseParseResult entry)
+    {
+        if (string.IsNullOrWhiteSpace(entry.Description))
+            return false;
+
+        var match = CurrencyCodeRegex.Match(entry.Description);
+        if (!match.Success)
+            return false;
+
+        var detectedCode = match.Groups[1].Value;
+        return string.Equals(detectedCode, CurrencyUsd, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ReplaceCurrencyCode(string description, string fromCode, string toCode)
+    {
+        return CurrencyCodeRegex.Replace(
+            description ?? string.Empty,
+            match =>
+            {
+                var currentCode = match.Groups[1].Value;
+                if (!string.Equals(currentCode, fromCode, StringComparison.OrdinalIgnoreCase))
+                    return match.Value;
+
+                return $"({toCode})";
+            },
+            1);
+    }
+
+    private static string FormatAmount(decimal amount)
+    {
+        var normalized = amount.ToString("0.############################", CultureInfo.InvariantCulture);
+        return normalized.TrimEnd('0').TrimEnd('.');
+    }
+
+    private static string AppendOriginalUsdAmount(string description, string usdAmount)
+    {
+        if (string.IsNullOrWhiteSpace(usdAmount))
+            return description ?? string.Empty;
+
+        var currentDescription = description?.Trim() ?? string.Empty;
+        var suffix = $"({usdAmount}$)";
+
+        if (currentDescription.Length == 0)
+            return suffix;
+
+        return $"{currentDescription} {suffix}";
     }
 }

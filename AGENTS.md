@@ -61,3 +61,34 @@ Recommended safe flow:
 - Avoid changing production secrets, app names, or function app targets without user approval.
 - Do not commit zip artifacts.
 - Keep `manifest.prod.json` and `manifest.staging.json` as source-of-truth; package via script.
+
+## Exchange rate behavior (implemented)
+- USD transactions are converted to CRC before returning `OnEmailPush` response.
+  - Implemented in `backend/functions/OnEmailPush.cs`.
+  - USD detection uses the currency code in description (e.g. `(USD)`), then:
+    - `amount` is converted to CRC using the table rate.
+    - description currency code is switched to `(CRC)`.
+    - original USD amount is appended as `(<usd_amount>$)` (example: `(9.99$)`).
+- Non-USD currencies are left unchanged.
+
+## Exchange rate source of truth
+- Request-time conversion reads the rate from Azure Table Storage (no external exchange API call per request).
+- Table defaults/config:
+  - Service URI: `https://compute911d.table.core.windows.net/` (`EXCHANGE_RATE_TABLE_SERVICE_URI`)
+  - Table name: `conversionRate` (`EXCHANGE_RATE_TABLE_NAME`)
+  - Row fields used: `From`, `To`, `Rate` (and `UpdatedAtUtc` when refreshed)
+- Service implementation: `backend/services/ExchangeRateService.cs`.
+
+## Daily refresh job
+- Function: `RefreshExchangeRate` in `backend/functions/RefreshExchangeRate.cs`.
+- Schedule: `0 0 6 * * *` (06:00 UTC = midnight Costa Rica).
+- Refresh flow:
+  - Reads API key from Key Vault secret `Exchange-rate-API`.
+  - Calls `https://v6.exchangerate-api.com/v6/{api-key}/pair/USD/CRC` (configurable via `EXCHANGE_RATE_API_URL_TEMPLATE`).
+  - Upserts table row with latest `Rate` and `UpdatedAtUtc`.
+
+## Local development notes
+- Timer triggers require a valid `AzureWebJobsStorage`.
+  - With `UseDevelopmentStorage=true`, run Azurite locally.
+  - If needed for local debugging, timer can be disabled via `AzureWebJobs.RefreshExchangeRate.Disabled=true` in `backend/local.settings.json`.
+- Temporary manual HTTP trigger for rate refresh was removed after validation; do not re-enable unless explicitly requested.

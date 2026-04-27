@@ -15,7 +15,7 @@ const MESSAGE_TYPES = {
 };
 
 const TEXT = {
-  UNKNOWN_ERROR: "error desconocido",
+  UNKNOWN_ERROR: "Ocurrió un error inesperado.",
   NOT_SIGNED_IN: "Sin sesión iniciada",
   SIGNED_IN_PREFIX: "Sesión iniciada: ",
   SIGN_IN_TO_ENABLE_SYNC: "Inicia sesión para habilitar la sincronización",
@@ -55,6 +55,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function setStatus(msg) {
     statusEl.textContent = msg;
+  }
+
+  function normalizeUiErrorMessage(raw) {
+    const message = String(raw || "").trim();
+    if (!message) return TEXT.UNKNOWN_ERROR;
+    if (/[áéíóúñ¿¡]/i.test(message)) return message;
+    if (/Failed to fetch/i.test(message) || /NetworkError/i.test(message)) {
+      return "No se pudo establecer conexión. Revisa tu conexión a internet e inténtalo de nuevo.";
+    }
+    if (/Receiving end does not exist/i.test(message)) {
+      return "No se pudo comunicar la interfaz con el proceso en segundo plano.";
+    }
+    if (/runtime\\.lastError/i.test(message)) {
+      return "La extensión encontró un problema interno. Inténtalo de nuevo.";
+    }
+    return TEXT.UNKNOWN_ERROR;
   }
 
   function setSyncIndicator(state) {
@@ -146,7 +162,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setStatus(TEXT.SIGNING_IN);
     const res = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.AUTH_SIGN_IN });
     if (!res?.ok) {
-      setStatus(`Error al iniciar sesión: ${res?.error || TEXT.UNKNOWN_ERROR}`);
+      setStatus(`Error al iniciar sesión: ${normalizeUiErrorMessage(res?.error)}`);
     } else {
       setStatus(TEXT.SIGNED_IN_SUCCESS);
     }
@@ -157,7 +173,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setStatus(TEXT.SIGNING_OUT);
     const res = await chrome.runtime.sendMessage({ type: MESSAGE_TYPES.AUTH_SIGN_OUT });
     if (!res?.ok) {
-      setStatus(`Error al cerrar sesión: ${res?.error || TEXT.UNKNOWN_ERROR}`);
+      setStatus(`Error al cerrar sesión: ${normalizeUiErrorMessage(res?.error)}`);
     } else {
       setStatus(TEXT.SIGNED_OUT_SUCCESS);
     }
@@ -214,18 +230,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (!res?.ok) {
         setSyncIndicator("idle");
-        setStatus(`Error al sincronizar: ${res?.error || TEXT.UNKNOWN_ERROR}`);
+        setStatus(`Error al sincronizar: ${normalizeUiErrorMessage(res?.error)}`);
         clearProcessLogSoon();
         return;
       }
 
       setSyncIndicator("idle");
       updateStep("labels", "done", "Proceso finalizado");
-      setStatus(`${TEXT.SYNC_SUCCESS_PREFIX} ${res.rowsAppended || 0} filas desde "${res.labelName}"`);
+      if (res.noEmails) {
+        setStatus(`No se encontraron correos en "${res.labelName}" para sincronizar.`);
+      } else if ((res.rowsAppended || 0) === 0) {
+        setStatus(`No se encontraron gastos nuevos para guardar desde "${res.labelName}".`);
+      } else {
+        setStatus(`${TEXT.SYNC_SUCCESS_PREFIX} ${res.rowsAppended || 0} filas desde "${res.labelName}"`);
+      }
       clearProcessLogSoon();
     } catch (err) {
       setSyncIndicator("idle");
-      setStatus(`Error al sincronizar: ${String(err?.message || err)}`);
+      setStatus(`Error al sincronizar: ${normalizeUiErrorMessage(err?.message || err)}`);
       clearProcessLogSoon();
     }
   });

@@ -2,7 +2,7 @@ async function handleAuthSignIn() {
   const tokenObject = await BackgroundCore.getAuthToken(true);
   const token = BackgroundCore.tokenFromAuthResult(tokenObject);
   if (!token) {
-    throw new Error("Could not acquire auth token.");
+    throw new Error("No se pudo obtener el token de autenticación.");
   }
 
   const info = await BackgroundCore.fetchUserInfo(token);

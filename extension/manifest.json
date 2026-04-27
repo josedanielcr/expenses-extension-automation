@@ -1,10 +1,24 @@
 {
   "manifest_version": 3,
-  "name": "ExpensIA",
-  "version": "1.0.1",
+  "name": "ExpensIA - testing",
+  "version": "1.0.0",
   "description": "ExpensIA: lee correos etiquetados, extrae gastos con IA y los guarda en Google Sheets.",
-  "action": { "default_popup": "popup.html" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "assets/Logo (icon) 16.png",
+      "32": "assets/Logo (icon) 32.png",
+      "48": "assets/Logo (icon) 48.png",
+      "128": "assets/Logo (icon) 128.png"
+    }
+  },
   "options_page": "options.html",
+  "icons": {
+    "16": "assets/Logo (icon) 16.png",
+    "32": "assets/Logo (icon) 32.png",
+    "48": "assets/Logo (icon) 48.png",
+    "128": "assets/Logo (icon) 128.png"
+  },
 
   "background": {
     "service_worker": "background.js"
@@ -13,11 +27,11 @@
   "permissions": ["storage", "identity"],
   "host_permissions": [
     "https://www.googleapis.com/*",
-    "https://email-processor-ai-angubybzh5feb8ce.canadacentral-01.azurewebsites.net/*"
+    "https://email-processor-ai-staging-ctd4dzdteqe0eudz.canadacentral-01.azurewebsites.net/*"
   ],
 
   "oauth2": {
-    "client_id": "941118571900-nggnu109q2tbad6g1v1jeosvbv99sf3f.apps.googleusercontent.com",
+    "client_id": "809872885598-gk190ua07acnt3hnlfgsh575bmrkg5jg.apps.googleusercontent.com",
     "scopes": [
       "openid",
       "https://www.googleapis.com/auth/userinfo.email",
